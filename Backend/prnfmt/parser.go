@@ -130,7 +130,7 @@ func ParserFmtToBuf(utf8Buff string, printerModel string, fmtLen int) *bytes.Buf
 		formatbuf = ParseEplLines(buff, dataCamp, lastVarPos)
 	} else if printerModel == "TSC" {
 		formatbuf = ParseTscLines(buff, dataCamp, lastVarPos)
-	} else if printerModel == "SBPL" {
+	} else if printerModel == "SATO" {
 		formatbuf = ParseSbplLines(buff, dataCamp, lastVarPos)
 	} else {
 		formatbuf = ParseEplLines(buff, dataCamp, lastVarPos)
