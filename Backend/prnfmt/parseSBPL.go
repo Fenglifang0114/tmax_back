@@ -71,12 +71,7 @@ func SbplLines(line []string, dataBuffer *bytes.Buffer, lastvarPos int, path str
 }
 
 func ParseSbplPage(tempRowArr []string, dataBuffer *bytes.Buffer) *bytes.Buffer {
-	if len(tempRowArr) < 3 {
-		return dataBuffer
-	}
-	wDots, _ := strconv.Atoi(tempRowArr[1])
-	hDots, _ := strconv.Atoi(tempRowArr[2])
-	dataBuffer.WriteString(fmt.Sprintf("%sA1%04d%04d", SBPL_ESC, hDots, wDots))
+	// 彻底去掉 A1 指令，避免页面尺寸设置导致坐标超出纸张边界
 	return dataBuffer
 }
 
@@ -218,32 +213,53 @@ func ParsSbplBarcode(tempRowArr []string, dataBuffer *bytes.Buffer, lastvarPos i
 	y, _ := strconv.Atoi(tempRowArr[2])
 	dataBuffer.WriteString(fmt.Sprintf("%sV%04d%sH%04d", SBPL_ESC, y, SBPL_ESC, x))
 
-	barcodeExcelPath := path + "\\" + EPL_BAR_CODE_EXCEL
-	codeType := getBarCodeTypeId(barcodeExcelPath, "SBPL", tempRowArr[6])
-	if codeType == "" {
-		codeType = "B"
-	}
-
+	// 获取参数
+	typeName := strings.ToUpper(tempRowArr[6]) // 转换为大写进行匹配
 	narrow, _ := strconv.Atoi(tempRowArr[5])
-	if narrow == 0 {
-		narrow = 1
+	if narrow <= 0 {
+		narrow = 2 // 默认窄条宽度
 	}
 	height, _ := strconv.Atoi(tempRowArr[4])
+	if height <= 0 {
+		height = 40 // 默认高度，确保 HRI 可见
+	}
 
-	if codeType == "BD" || codeType == "BC" {
-		// EAN系列倍率通常为1位
-		dataBuffer.WriteString(fmt.Sprintf("%s%s%1d%03d", SBPL_ESC, codeType, narrow, height))
-	} else if codeType == "B" {
-		// Code 39 需要比例参数，默认设为 1 (1:2)
-		dataBuffer.WriteString(fmt.Sprintf("%sB1%02d%03d", SBPL_ESC, narrow, height))
-	} else {
-		// 其他条码（如BG）通常为2位倍率
-		dataBuffer.WriteString(fmt.Sprintf("%s%s%02d%03d", SBPL_ESC, codeType, narrow, height))
+	switch typeName {
+	case "EAN13", "2":
+		// 格式：BD + 类型(3) + 倍率(2位) + 高度(3位)
+		dataBuffer.WriteString(fmt.Sprintf("%sBD3%02d%03d", SBPL_ESC, narrow, height))
+	case "EAN8", "3":
+		// 格式：BD + 类型(4) + 倍率(2位) + 高度(3位)
+		dataBuffer.WriteString(fmt.Sprintf("%sBD4%02d%03d", SBPL_ESC, narrow, height))
+	case "UPCA", "4":
+		// 格式：BD + 类型(H) + 倍率(2位) + 高度(3位)
+		dataBuffer.WriteString(fmt.Sprintf("%sBDH%02d%03d", SBPL_ESC, narrow, height))
+	case "UPCE", "5":
+		// 格式：BD + 类型(E) + 倍率(2位) + 高度(3位)
+		dataBuffer.WriteString(fmt.Sprintf("%sDE%02d%03d", SBPL_ESC, narrow, height))
+	case "CODE128", "1":
+		// Code 128 使用 BG 指令，倍率(2位) + 高度(3位)
+		dataBuffer.WriteString(fmt.Sprintf("%sBG%02d%03d", SBPL_ESC, narrow, height))
+	case "CODE39", "0":
+		// 格式：D1 + 2位倍率 + 3位高度 (1:3比例，更易扫描)
+		dataBuffer.WriteString(fmt.Sprintf("%sD1%02d%03d", SBPL_ESC, narrow, height))
+	default:
+		// 不支持的类型直接返回，不生成指令
+		return dataBuffer, lastvarPos
+	}
+
+	// 针对 Code 39 自动补全起止符 *，确保扫描成功
+	isCode39 := (typeName == "CODE39" || typeName == "0")
+	if isCode39 {
+		dataBuffer.WriteString("*")
 	}
 
 	parseContentArr := tempRowArr[9:]
-
 	dataBuffer, lastvarPos = FindVarInfo(parseContentArr, dataBuffer, lastvarPos)
+
+	if isCode39 {
+		dataBuffer.WriteString("*")
+	}
 
 	return dataBuffer, lastvarPos
 }
@@ -275,4 +291,3 @@ func ParsSbplQRcode(tempRowArr []string, dataBuffer *bytes.Buffer, lastvarPos in
 
 	return dataBuffer, lastvarPos
 }
-
