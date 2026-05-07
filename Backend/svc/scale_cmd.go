@@ -296,6 +296,16 @@ func (c *Scale) PerfTare() (*ScaleRespMsg, error) {
 	return excuteSimpCmd(c, m.CMD_TARE, m.TARE_CMD_RESP)
 }
 
+func (c *Scale) PerfZeroUnstable() (*ScaleRespMsg, error) {
+	l.Log.Debug("perform zero unstable")
+	return excuteSimpCmd(c, m.CMD_ZERO_UNSTABLE, m.ZERO_UNSTABLE_CMD_RESP)
+}
+
+func (c *Scale) PerfTareUnstable() (*ScaleRespMsg, error) {
+	l.Log.Debug("perform tare unstable")
+	return excuteSimpCmd(c, m.CMD_TARE_UNSTABLE, m.TARE_UNSTABLE_CMD_RESP)
+}
+
 func (c *Scale) ReadWeight() (*ScaleRespMsg, error) {
 	// if c.isOldC51Scale {
 	//     return perfCmd(c, []byte(GET_WEIGHT_CMD))

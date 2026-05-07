@@ -30,6 +30,9 @@ const (
 	CMD_TARE
 	CMD_READ_WEIGHT
 
+	CMD_ZERO_UNSTABLE
+	CMD_TARE_UNSTABLE
+
 	CMD_EN_CONTINUE_MODE
 	CMD_DIS_CONTINUE_MODE
 
@@ -186,6 +189,8 @@ type RespMsgType string
 // 处理scale回应
 const (
 	WEIGHT_DATA                   RespMsgType = "weight_data"
+	ZERO_UNSTABLE_CMD_RESP        RespMsgType = "resp_zero_unstable_cmd"
+	TARE_UNSTABLE_CMD_RESP        RespMsgType = "resp_tare_unstable_cmd"
 	ZERO_CMD_RESP                 RespMsgType = "resp_zero_cmd"
 	TARE_CMD_RESP                 RespMsgType = "resp_tare_cmd"
 	WEIGHT_DATA_RESP              RespMsgType = "resp_weight_data"

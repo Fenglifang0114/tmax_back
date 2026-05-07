@@ -256,6 +256,16 @@ func (p *FormulaRecProvider) UpdateSetAutoNext(rec SetAutoNext) error {
 	return p.infoPb.UpdateSetAutoNext(rec.AutoNext, rec.StableTime, rec.AutoTare, rec.CheckCode)
 }
 
+// 获取不稳定归零扣重设置
+func (p *FormulaRecProvider) GetUnstableZeroTare() (bool, error) {
+	return p.infoPb.GetUnstableZeroTare()
+}
+
+// 更新不稳定归零扣重设置
+func (p *FormulaRecProvider) UpdateUnstableZeroTare(enable bool) error {
+	return p.infoPb.UpdateUnstableZeroTare(enable)
+}
+
 // 创建暂存配方称重记录
 func (p *FormulaRecProvider) CreateDraftFmaWgtRecHeader(rec DrafFmaWgtRecHeader) error {
 	return p.infoPb.CreateDraftFmaWgtRecHeader(rec)

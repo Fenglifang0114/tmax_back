@@ -671,6 +671,14 @@ func procZero(scale *Scale, req SRequest) (*ScaleRespMsg, error) {
 	return scale.PerfZero()
 }
 
+func procZeroUnstable(scale *Scale, req SRequest) (*ScaleRespMsg, error) {
+	return scale.PerfZeroUnstable()
+}
+
+func procTareUnstable(scale *Scale, req SRequest) (*ScaleRespMsg, error) {
+	return scale.PerfTareUnstable()
+}
+
 func GetResVsResp(reqType SReqType) m.RespMsgType {
 	return conversionMap[reqType]
 }
@@ -743,6 +751,8 @@ func init() {
 		SREQ_GET_WEIGHT:               procGetWeight,
 		SREQ_ZERO:                     procZero,
 		SREQ_TARE:                     procTare,
+		SREQ_ZERO_UNSTABLE:            procZeroUnstable,
+		SREQ_TARE_UNSTABLE:            procTareUnstable,
 		SREQ_REG_WEIGHT_DATA:          procRegWeight,
 		SREQ_UNREG_WEIGHT_DATA:        procUnRegWeight,
 		SREQ_GET_RECS:                 procGetRecs,
@@ -844,6 +854,8 @@ func init() {
 	conversionMap = map[SReqType]m.RespMsgType{
 		SREQ_ZERO:                     m.ZERO_CMD_RESP,
 		SREQ_TARE:                     m.TARE_CMD_RESP,
+		SREQ_ZERO_UNSTABLE:            m.ZERO_UNSTABLE_CMD_RESP,
+		SREQ_TARE_UNSTABLE:            m.TARE_UNSTABLE_CMD_RESP,
 		SREQ_GET_WEIGHT:               m.WEIGHT_DATA_RESP,
 		SREQ_SEND_WT_CONT:             m.WEIGHT_DATA_RESP,
 		SREQ_STOP_SEND_WT:             m.WEIGHT_DATA_RESP,

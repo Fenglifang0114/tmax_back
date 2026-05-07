@@ -54,6 +54,8 @@ var responseHandlerMap map[m.RespMsgType]func(int64, []byte) (ScaleRespMsg, int)
 func init() {
 	util.CmdsRespMap = util.CmdMap{
 		0xe107:                           m.WEIGHT_DATA,
+		0xe401:                           m.ZERO_UNSTABLE_CMD_RESP,
+		0xe402:                           m.TARE_UNSTABLE_CMD_RESP,
 		0xe103:                           m.ZERO_CMD_RESP,
 		0xe105:                           m.TARE_CMD_RESP,
 		0xe101:                           m.WEIGHT_DATA_RESP,
@@ -150,9 +152,13 @@ func init() {
 	}
 
 	responseHandlerMap = map[m.RespMsgType]func(int64, []byte) (ScaleRespMsg, int){
-		m.WEIGHT_DATA:               handleWeightDataMsg,
-		m.ZERO_CMD_RESP:             handleZeroCmdResp,
-		m.TARE_CMD_RESP:             handleTareCmdResp,
+		m.WEIGHT_DATA:   handleWeightDataMsg,
+		m.ZERO_CMD_RESP: handleZeroCmdResp,
+		m.TARE_CMD_RESP: handleTareCmdResp,
+
+		m.ZERO_UNSTABLE_CMD_RESP: handleZeroUnstableCmdResp,
+		m.TARE_UNSTABLE_CMD_RESP: handleTareUnstableCmdResp,
+
 		m.WEIGHT_DATA_RESP:          handleWeightDataResp,
 		m.REG_WEIGHT_RESP:           handleRegWeightResp,
 		m.UNREG_WEIGHT_RESP:         handleUnregWeightResp,
@@ -405,6 +411,34 @@ func handleTareCmdResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
 		msg.MsgBody = "ok"
 	} else {
 		msg.MsgType = m.TARE_CMD_RESP
+		msg.ScaleId = scaleId
+		msg.MsgBody = "fail"
+	}
+	return msg, len(data)
+}
+
+func handleZeroUnstableCmdResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
+	msg := ScaleRespMsg{}
+	if data[0] == 0x06 {
+		msg.MsgType = m.ZERO_UNSTABLE_CMD_RESP
+		msg.ScaleId = scaleId
+		msg.MsgBody = "ok"
+	} else {
+		msg.MsgType = m.ZERO_UNSTABLE_CMD_RESP
+		msg.ScaleId = scaleId
+		msg.MsgBody = "fail"
+	}
+	return msg, len(data)
+}
+
+func handleTareUnstableCmdResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
+	msg := ScaleRespMsg{}
+	if data[0] == 0x06 {
+		msg.MsgType = m.TARE_UNSTABLE_CMD_RESP
+		msg.ScaleId = scaleId
+		msg.MsgBody = "ok"
+	} else {
+		msg.MsgType = m.TARE_UNSTABLE_CMD_RESP
 		msg.ScaleId = scaleId
 		msg.MsgBody = "fail"
 	}

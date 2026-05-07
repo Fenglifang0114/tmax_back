@@ -853,6 +853,18 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 		} else {
 			updateAutoNext.Trigger(scaleMgr.srvMgr, data)
 		}
+
+	case REQ_GET_UNSTABLE_ZERO_TARE:
+		getUnstableZeroTare.Trigger(scaleMgr.srvMgr)
+
+	case REQ_UPDATE_UNSTABLE_ZERO_TARE:
+		jsonStr := req.ReqData
+		var data ReqUpdateUnstableZeroTare
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			updateUnstableZeroTare.Trigger(scaleMgr.srvMgr, data)
+		}
 	case REQ_EDIT_RAW_DATA:
 		jsonStr := req.ReqData
 		var data ReqEditRawData
@@ -3753,6 +3765,24 @@ func (p getAutoNextNotifier) Handle(mgr *SrvMgr) {
 
 	}
 	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_GET_AUTO_NEXT, MsgBody: typesStr}
+}
+
+// 获取不稳定归零扣重设置
+func (p getUnstableZeroTareNotifier) Handle(mgr *SrvMgr) {
+	l.Log.Debug("Handle getUnstableZeroTareNotifier called")
+	val, _ := mgr.formulaPd.GetUnstableZeroTare()
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_GET_UNSTABLE_ZERO_TARE, MsgBody: fmt.Sprintf("%v", val)}
+}
+
+// 更新不稳定归零扣重设置
+func (p updateUnstableZeroTareNotifier) Handle(mgr *SrvMgr, payload ReqUpdateUnstableZeroTare) {
+	l.Log.Debug("Handle updateUnstableZeroTareNotifier called")
+	err := mgr.formulaPd.UpdateUnstableZeroTare(payload.Enable)
+	msgBody := "ok"
+	if err != nil {
+		msgBody = "fail"
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_UPDATE_UNSTABLE_ZERO_TARE, MsgBody: msgBody}
 }
 
 // 更新自动下一步设置

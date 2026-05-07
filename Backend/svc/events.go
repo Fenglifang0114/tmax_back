@@ -1680,6 +1680,51 @@ func (u UpdateAutoNext) Trigger(mgr *SrvMgr, payload ReqUpdateAutoNext) {
 	}
 }
 
+// 不稳定归零扣重
+var getUnstableZeroTare GetUnstableZeroTare
+
+type GetUnstableZeroTare struct {
+	handlers []interface {
+		Handle(mgr *SrvMgr)
+	}
+}
+
+// Register adds an event handler for this event
+func (u *GetUnstableZeroTare) Register(handler interface {
+	Handle(mgr *SrvMgr)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+// Trigger sends out an event with the payload
+func (u GetUnstableZeroTare) Trigger(payload *SrvMgr) {
+	for _, handler := range u.handlers {
+		go handler.Handle(payload)
+	}
+}
+
+var updateUnstableZeroTare UpdateUnstableZeroTare
+
+type UpdateUnstableZeroTare struct {
+	handlers []interface {
+		Handle(mgr *SrvMgr, payload ReqUpdateUnstableZeroTare)
+	}
+}
+
+// Register adds an event handler for this event
+func (u *UpdateUnstableZeroTare) Register(handler interface {
+	Handle(*SrvMgr, ReqUpdateUnstableZeroTare)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+// Trigger sends out an event with the payload
+func (u UpdateUnstableZeroTare) Trigger(mgr *SrvMgr, payload ReqUpdateUnstableZeroTare) {
+	for _, handler := range u.handlers {
+		go handler.Handle(mgr, payload)
+	}
+}
+
 var updateSetReportPrint UpdateSetReportPrint
 
 type UpdateSetReportPrint struct {

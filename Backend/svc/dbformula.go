@@ -1880,11 +1880,12 @@ func (d *DbFormulaInfo) DeleteAllFormulaByRecId(recIds []int) error {
 
 // 配方秤中的自动下一步设置
 type SetAutoNext struct {
-	RecID      int  `gorm:"primaryKey;autoincrement;not null"`
-	AutoNext   bool `gorm:"not null"`
-	StableTime int  `gorm:"not null"`
-	AutoTare   bool `gorm:"default:0; not null"`
-	CheckCode  bool `gorm:"default:0; not null"`
+	RecID            int  `gorm:"primaryKey;autoincrement;not null"`
+	AutoNext         bool `gorm:"not null"`
+	StableTime       int  `gorm:"not null"`
+	AutoTare         bool `gorm:"default:0; not null"`
+	CheckCode        bool `gorm:"default:0; not null"`
+	UnstableZeroTare bool `gorm:"default:0; not null"` // 新增字段
 }
 
 // 打印字段是否显示表
@@ -2212,6 +2213,30 @@ func (d *DbFormulaInfo) GetSetAutoNext() (*SetAutoNext, error) {
 		return nil, err
 	}
 	return &setAutoNext, nil
+}
+
+// 获取不稳定归零扣重开关
+func (d *DbFormulaInfo) GetUnstableZeroTare() (bool, error) {
+	set, err := d.GetSetAutoNext()
+	if err != nil {
+		return false, err
+	}
+	return set.UnstableZeroTare, nil
+}
+
+// 更新不稳定归零扣重开关
+func (d *DbFormulaInfo) UpdateUnstableZeroTare(enable bool) error {
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	// 更新第一条记录（通常配置表只有一条记录）
+	return db.Model(&SetAutoNext{}).Where("1 = 1").Update("unstable_zero_tare", enable).Error
 }
 
 //暂存配方的增删改查

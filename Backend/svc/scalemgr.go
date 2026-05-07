@@ -289,6 +289,12 @@ func init() {
 	createGetAutoNextNotifier := getAutoNextNotifier{}
 	getAutoNext.Register(createGetAutoNextNotifier)
 
+	createGetUnstableZeroTareNotifier := getUnstableZeroTareNotifier{}
+	getUnstableZeroTare.Register(createGetUnstableZeroTareNotifier)
+
+	createUpdateUnstableZeroTareNotifier := updateUnstableZeroTareNotifier{}
+	updateUnstableZeroTare.Register(createUpdateUnstableZeroTareNotifier)
+
 	createUpdateOutputPortNotifier := updateOutputPortNotifier{}
 	updateOutputPort.Register(createUpdateOutputPortNotifier)
 
@@ -564,6 +570,10 @@ type addWgtRecNotifier struct{}
 type exportAllRecsNotifier struct{}
 
 type getAutoNextNotifier struct{}
+
+type getUnstableZeroTareNotifier struct{}
+
+type updateUnstableZeroTareNotifier struct{}
 
 type updateAutoNextNotifier struct{}
 

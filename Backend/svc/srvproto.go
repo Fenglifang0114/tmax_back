@@ -120,6 +120,9 @@ const (
 	REQ_GET_INPUT_PORT    ReqType = "get_input_port"    //获取输入端口状态
 	REQ_UPDATE_INPUT_PORT ReqType = "update_input_port" //更新输入端口状态
 
+	REQ_GET_UNSTABLE_ZERO_TARE    ReqType = "get_unstable_zero_tare"    //获取不稳定归零扣重开关
+	REQ_UPDATE_UNSTABLE_ZERO_TARE ReqType = "update_unstable_zero_tare" //更新不稳定归零扣重开关
+
 	REQ_GET_FORMULA_BY_BARCODE   ReqType = "get_formula_by_barcode"   //根据条码获取配方信息
 	REQ_CHECK_FMA_ID_AND_BARCODE ReqType = "check_fma_id_and_barcode" //检查配方ID和条码是否匹配
 
@@ -326,6 +329,10 @@ type ReqUpdateOutputPort struct {
 	StartTime int
 	EndValue  float64
 	Remark    string
+}
+
+type ReqUpdateUnstableZeroTare struct {
+	Enable bool
 }
 
 type ReqUpdateInputPort struct {
@@ -884,6 +891,8 @@ const (
 	SCALE_MGR_RESP_EXPORT_ALL_RECS               ScaleMgrRespMsgType = "resp_export_all_recs"     // without parameter
 	SCALE_MGR_RESP_KILL_BOOT_COMMANDER           ScaleMgrRespMsgType = "resp_kill_boot_commander" // without parameter
 	SCALE_MGR_RESP_GET_AUTO_NEXT                 ScaleMgrRespMsgType = "resp_get_auto_next"
+	SCALE_MGR_RESP_GET_UNSTABLE_ZERO_TARE        ScaleMgrRespMsgType = "resp_get_unstable_zero_tare"
+	SCALE_MGR_RESP_UPDATE_UNSTABLE_ZERO_TARE     ScaleMgrRespMsgType = "resp_update_unstable_zero_tare"
 	SCALE_MGR_RESP_UPDATE_AUTO_NEXT              ScaleMgrRespMsgType = "resp_update_auto_next"
 	SCALE_MGR_RESP_GET_OUTPUT_PORT               ScaleMgrRespMsgType = "resp_get_output_port"    //获取输出端口状态
 	SCALE_MGR_RESP_UPDATE_OUTPUT_PORT            ScaleMgrRespMsgType = "resp_update_output_port" //更新输出端口状态
@@ -1022,6 +1031,8 @@ type SReqType string
 const (
 	SREQ_ZERO                     SReqType = "zero"
 	SREQ_TARE                     SReqType = "tare"
+	SREQ_ZERO_UNSTABLE            SReqType = "zero_unstable"
+	SREQ_TARE_UNSTABLE            SReqType = "tare_unstable"
 	SREQ_GET_WEIGHT               SReqType = "get_weight"
 	SREQ_SEND_WT_CONT             SReqType = "send_wt_cont"
 	SREQ_STOP_SEND_WT             SReqType = "stop_send_wt"
