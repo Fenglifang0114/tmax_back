@@ -322,6 +322,14 @@ func procGetDecimalValue(scale *Scale, req SRequest) (*ScaleRespMsg, error) {
 	return ReqGetDecimalValue(scale, req)
 }
 
+func procSetSerialPort(scale *Scale, req SRequest) (*ScaleRespMsg, error) {
+	return ReqSetSerialPort(scale, req)
+}
+
+func procGetSerialPort(scale *Scale, req SRequest) (*ScaleRespMsg, error) {
+	return ReqGetSerialPort(scale, req)
+}
+
 func procGetWeightUnit(scale *Scale, req SRequest) (*ScaleRespMsg, error) {
 	return ReqGetWeightUnit(scale, req)
 }
@@ -825,6 +833,8 @@ func init() {
 		SREQ_GET_GADUATION1_VALUE:  procGetGaduation1Value,
 		SREQ_GET_GADUATION2_VALUE:  procGetGaduation2Value,
 		SREQ_GET_DECIMAL_VALUE:     procGetDecimalValue,
+		SREQ_SET_SERIAL_PORT:       procSetSerialPort,
+		SREQ_GET_SERIAL_PORT:       procGetSerialPort,
 		SREQ_SET_WEIGHT_UNIT:       procSetWeightUnit,
 		SREQ_GET_WEIGHT_UNIT:       procGetWeightUnit,
 		SREQ_SET_INITIAL_ZERO:      procSetInitialZero,

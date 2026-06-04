@@ -1109,6 +1109,8 @@ const (
 	SREQ_GET_GADUATION1_VALUE SReqType = "get_gaduation1_value" //20250716
 	SREQ_GET_GADUATION2_VALUE SReqType = "get_gaduation2_value" //20250716
 	SREQ_GET_DECIMAL_VALUE    SReqType = "get_decimal_value"    //20250716
+	SREQ_SET_SERIAL_PORT      SReqType = "set_serial_port"
+	SREQ_GET_SERIAL_PORT      SReqType = "get_serial_port"
 	SREQ_SET_WEIGHT_UNIT      SReqType = "set_weight_unit"      //20250716
 	SREQ_GET_WEIGHT_UNIT      SReqType = "get_weight_unit"      //20250716
 	SREQ_SET_INITIAL_ZERO     SReqType = "set_initial_zero"     //20250716

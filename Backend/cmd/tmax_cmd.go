@@ -307,6 +307,11 @@ func ComposeCmdTMAX(composer *m.CmdComposer, cmd m.CmdType, cmdData m.CmdData) (
 		return DIS_CODE_CMD_TMAX, CMD_TIMEOUT_VERY_SHORT_200_MS, nil
 	case m.CMD_ASK_ROM_VERSION:
 		return ASK_ROM_VERSION_CMD_TMAX, CMD_TIMEOUT_VERY_SHORT_200_MS, nil
+	case m.CMD_SET_SERIAL_PORT:
+		dataStr := cmdData.Data.(string)
+		return composeCmd(CMDID_SET_SERIAL_PORT_TMAX, 0, []byte(dataStr)), CMD_TIMEOUT_LONG_20000_MS, nil
+	case m.CMD_GET_SERIAL_PORT:
+		return composeCmd(CMDID_GET_SERIAL_PORT_TMAX, 0, []byte{}), CMD_TIMEOUT_VERY_SHORT_200_MS, nil
 
 	}
 
@@ -419,6 +424,8 @@ const (
 	CMDID_SET_GRAVITY_ACCEL_TMAX    = 0xE332 //设置重力加速度
 	CMDID_GET_GRAVITY_ACCEL_TMAX    = 0xE333 //读取重力加速度
 	CMDID_SET_FORCE_UNTARE_TMAX     = 0xE33A //强制解除扣重
+	CMDID_SET_SERIAL_PORT_TMAX      = 0xE340 //设置串口
+	CMDID_GET_SERIAL_PORT_TMAX      = 0xE341 //读取串口
 
 )
 

@@ -384,7 +384,6 @@ func (s *Scale) keepNetState(myNet *TNet) {
 
 // 移除 keepNetOnline 函数，因为不再需要通过指令获取 SN 和型号
 
-
 func sendScaleOnlineToUi(s *Scale, isOnline bool, modelName string, sn string) {
 	sta := &ScaleIsOnlineInfo{ScaleId: s.Conn.ScaleId, IsOnline: isOnline, ModelName: modelName, Sn: sn}
 	recsStr, _ := json.MarshalToString(sta)
@@ -4761,6 +4760,27 @@ func ReqGetDecimalValue(c *Scale, req SRequest) (*ScaleRespMsg, error) {
 		return &ScaleRespMsg{m.GET_DECIMAL_VALUE_RESP, "fail", c.Id}, nil
 	}
 	return excuteSimpCmd(c, m.CMD_GET_DECIMAL_VALUE, m.GET_DECIMAL_VALUE_RESP)
+}
+
+func ReqSetSerialPort(c *Scale, req SRequest) (*ScaleRespMsg, error) {
+	reqData := req.ReqData
+	// _, err, res := openFactory(c)
+	// if err != nil || !res {
+	// 	return &ScaleRespMsg{m.SET_SERIAL_PORT_RESP, "fail", c.Id}, nil
+	// }
+	cmd, timeoutMs, err := c.composer.ComposeCmd(c.composer, m.CMD_SET_SERIAL_PORT, m.CmdData{Type: m.DATA_TYPE_STR, Data: reqData})
+	if err != nil {
+		return &ScaleRespMsg{m.SET_SERIAL_PORT_RESP, fmt.Errorf("fail"), c.Id}, nil
+	}
+	return perfCmdNwaitResult(c, cmd, m.SET_SERIAL_PORT_RESP, timeoutMs)
+}
+
+func ReqGetSerialPort(c *Scale, req SRequest) (*ScaleRespMsg, error) {
+	// _, err, res := openFactory(c)
+	// if err != nil || !res {
+	// 	return &ScaleRespMsg{m.GET_SERIAL_PORT_RESP, "fail", c.Id}, nil
+	// }
+	return excuteSimpCmd(c, m.CMD_GET_SERIAL_PORT, m.GET_SERIAL_PORT_RESP)
 }
 
 // 设置初始置零

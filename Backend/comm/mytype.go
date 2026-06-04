@@ -140,6 +140,8 @@ const (
 	CMD_EN_CODE
 	CMD_DIS_CODE
 	CMD_ASK_ROM_VERSION
+	CMD_SET_SERIAL_PORT
+	CMD_GET_SERIAL_PORT
 )
 
 type DataType int
@@ -318,6 +320,8 @@ const (
 	SET_WIRED_DHCP_RESP        RespMsgType = "resp_set_wired_dhcp"
 	GET_WIRED_DHCP_RESP        RespMsgType = "resp_get_wired_dhcp"
 	REMOVE_SOFT_SEAL_ONCE_RESP RespMsgType = "resp_remove_soft_seal_once"
+	SET_SERIAL_PORT_RESP       RespMsgType = "resp_set_serial_port"
+	GET_SERIAL_PORT_RESP       RespMsgType = "resp_get_serial_port"
 
 	CLOSE_SERVER_CMD_RESP          RespMsgType = "resp_close_server_cmd"
 	DIS_BT_CMD_RESP                RespMsgType = "resp_dis_bt_cmd"

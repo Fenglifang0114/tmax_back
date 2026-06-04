@@ -145,6 +145,9 @@ func init() {
 		cmd.CMDID_REMOVE_SOFT_SEAL_TMAX:     m.REMOVE_SOFT_SEAL_RESP,
 		cmd.CMDID_REMOVE_SOFT_SEAL_ONCE_TMX: m.REMOVE_SOFT_SEAL_ONCE_RESP,
 
+		cmd.CMDID_SET_SERIAL_PORT_TMAX: m.SET_SERIAL_PORT_RESP,
+		cmd.CMDID_GET_SERIAL_PORT_TMAX: m.GET_SERIAL_PORT_RESP,
+
 		cmd.CMDID_GET_MODEL_TMAX: m.GET_MODEL_RESP,
 		cmd.CMDID_CONT_CODE_TMAX: m.CONT_CODE_RESP,
 
@@ -242,6 +245,9 @@ func init() {
 		m.REMOVE_SOFT_SEAL_RESP:      handleRemoveSoftSealResp,
 		m.REMOVE_SOFT_SEAL_ONCE_RESP: handleRemoveSoftSealOnceResp,
 		m.CONT_CODE_RESP:             handleContCodeResp,
+
+		m.SET_SERIAL_PORT_RESP: handleSetSerialPortResp,
+		m.GET_SERIAL_PORT_RESP: handleGetSerialPortResp,
 
 		m.GET_MODEL_RESP: handleGetModelResp,
 	}
@@ -796,6 +802,21 @@ func handleGetSealStatusResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
 
 	return ScaleRespMsg{ScaleId: scaleId, MsgType: m.GET_SEAL_STATUS_RESP, MsgBody: msgBody}, len(data)
 
+}
+
+func handleSetSerialPortResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
+	if len(data) >= 1 && data[0] == 0x06 {
+		return ScaleRespMsg{ScaleId: scaleId, MsgType: m.SET_SERIAL_PORT_RESP, MsgBody: "ok"}, len(data)
+	}
+	return ScaleRespMsg{ScaleId: scaleId, MsgType: m.SET_SERIAL_PORT_RESP, MsgBody: "fail"}, len(data)
+}
+
+func handleGetSerialPortResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
+	if len(data) < 1 {
+		return ScaleRespMsg{ScaleId: scaleId, MsgType: m.GET_SERIAL_PORT_RESP, MsgBody: "fail"}, len(data)
+	}
+	str := string(data)
+	return ScaleRespMsg{ScaleId: scaleId, MsgType: m.GET_SERIAL_PORT_RESP, MsgBody: str}, len(data)
 }
 
 func handleSoftSealResp(scaleId int64, data []byte) (ScaleRespMsg, int) {

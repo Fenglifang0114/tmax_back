@@ -885,7 +885,7 @@ func perfCmdNwaitResult(c *Scale, cmd []byte, waitMsgType m.RespMsgType, timeout
 		GlastWantRespMsgType = waitMsgType
 		c.isWaintingResp = true
 		if err = writeScale(c, cmd); err != nil {
-			l.Log.Error(err.Error())
+			l.Log.Errorf("【调试】writeScale报错: %v", err.Error())
 			ret = &ScaleRespMsg{MsgType: waitMsgType, ScaleId: c.Id, MsgBody: "error"}
 			time.Sleep(500 * time.Millisecond)
 			continue
@@ -897,7 +897,9 @@ func perfCmdNwaitResult(c *Scale, cmd []byte, waitMsgType m.RespMsgType, timeout
 
 		select {
 		case ret = <-ch:
+			l.Log.Infof("【调试】收到回复，提前结束等待: type=%v, body=%v", ret.MsgType, ret.MsgBody)
 		case <-time.After(time.Duration(curTimeoutMs) * time.Millisecond):
+			l.Log.Infof("【调试】等待超时: %v ms", curTimeoutMs)
 			ret = &ScaleRespMsg{MsgType: waitMsgType, ScaleId: c.Id, MsgBody: "timeout"}
 			err = fmt.Errorf("no response, time out")
 			time.Sleep(500 * time.Millisecond)
