@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "go.useLanguageServer": true,
     "gopls": {
-	    "formatting.gofumpt": true,
+        "formatting.gofumpt": true,
     },
     "configurations": [
         {
@@ -13,7 +13,10 @@
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "main.go"
+            "program": "main.go",
+            "dlvFlags": [
+                "--check-go-version=false"
+            ]
         }
     ]
 }
