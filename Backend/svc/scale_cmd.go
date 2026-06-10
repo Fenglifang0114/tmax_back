@@ -1141,6 +1141,51 @@ var cmdComposerFuncMap map[m.ScaleCat]m.CmdComposer
 // cmdComposerFuncMap := make(map[m.ScaleCat]func(req SReqType, reqData string) ([]byte, error))
 // cmdComposerFuncMap[m.SCALE_T2200] = ComposerT2200
 
+func GetGrossWeight(s *Scale) (float32, error) {
+	resp, err := excuteSimpCmd(s, m.CMD_GET_GROSS_WEIGHT, m.GET_GROSS_WEIGHT_RESP, 1)
+	if err != nil {
+		return 0.0, err
+	}
+	fVal, err := strconv.ParseFloat(resp.MsgBody.(string), 32)
+	return float32(fVal), err
+}
+
+func GetNetWeight(s *Scale) (float32, error) {
+	resp, err := excuteSimpCmd(s, m.CMD_GET_NET_WEIGHT, m.GET_NET_WEIGHT_RESP, 1)
+	if err != nil {
+		return 0.0, err
+	}
+	fVal, err := strconv.ParseFloat(resp.MsgBody.(string), 32)
+	return float32(fVal), err
+}
+
+func GetTareWeight(s *Scale) (float32, error) {
+	resp, err := excuteSimpCmd(s, m.CMD_GET_TARE_WEIGHT, m.GET_TARE_WEIGHT_RESP, 1)
+	if err != nil {
+		return 0.0, err
+	}
+	fVal, err := strconv.ParseFloat(resp.MsgBody.(string), 32)
+	return float32(fVal), err
+}
+
+func GetPreTareWeight(s *Scale) (float32, error) {
+	resp, err := excuteSimpCmd(s, m.CMD_GET_PRE_TARE_WEIGHT, m.GET_PRE_TARE_WEIGHT_RESP, 1)
+	if err != nil {
+		return 0.0, err
+	}
+	fVal, err := strconv.ParseFloat(resp.MsgBody.(string), 32)
+	return float32(fVal), err
+}
+
+func GetWeightUnitCmd(s *Scale) (int, error) {
+	resp, err := excuteSimpCmd(s, m.CMD_GET_WEIGHT_UNIT, m.GET_WEIGHT_UNIT_RESP, 1)
+	if err != nil {
+		return 0, err
+	}
+	unit, err := strconv.Atoi(resp.MsgBody.(string))
+	return unit, err
+}
+
 func init() {
 	cmdComposerFuncMap = make(map[m.ScaleCat]m.CmdComposer)
 	cmdComposerFuncMap[m.SCALE_C51] = *mcmd.NewComposerC51()

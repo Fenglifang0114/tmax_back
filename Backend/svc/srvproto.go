@@ -69,6 +69,12 @@ const (
 	REQ_SET_SCALE_SRV_VAL     ReqType = "set_scale_srv_val"
 	REQ_SET_DO_SERVICE_ACTION ReqType = "do_service_action"
 
+	// Modbus 服务网关相关
+	REQ_GET_MODBUS_SERVICES ReqType = "get_modbus_services"
+	REQ_ADD_MODBUS_SERVICE  ReqType = "add_modbus_service"
+	REQ_EDIT_MODBUS_SERVICE ReqType = "edit_modbus_service"
+	REQ_DEL_MODBUS_SERVICE  ReqType = "del_modbus_service"
+
 	///////////
 	REQ_ADD_RAW_TYPE             ReqType = "add_raw_type"             //添加原料类型
 	REQ_DEL_UNUSED_FMA_TYPE      ReqType = "del_unused_fma_type"      //删除未使用的配方类型
@@ -177,6 +183,7 @@ type ReqAddScale struct {
 	ScaleSn    string
 	// MediaType  MediaType
 	MediaConf MediaConf // will be ComInfo/NetInfo/BtInfo according to the media type
+	ModbusId  int       // 关联的 Modbus 从机站号
 }
 
 type ReqDelScale struct {
@@ -188,6 +195,7 @@ type ReqModifyScale struct {
 	// MediaType MediaType
 	MediaConf  MediaConf
 	ScaleModel string
+	ModbusId   int // 关联的 Modbus 从机站号
 }
 
 type ReqModifyScaleName struct {
@@ -301,6 +309,25 @@ type ReqModifyUser struct {
 	IsFemale bool
 	Phone    string
 	Remarks  string
+}
+
+type ReqAddModbusService struct {
+	TargetModbusId int
+	Protocol       string // "RTU" or "TCP"
+	Port           string // "COM2" or "502"
+	BaudRate       int    // 9600
+}
+
+type ReqEditModbusService struct {
+	Id             uint
+	TargetModbusId int
+	Protocol       string
+	Port           string
+	BaudRate       int
+}
+
+type ReqDelModbusService struct {
+	Id uint
 }
 
 type ReqAddRawType struct {
@@ -799,6 +826,14 @@ type SrvMgrRespMsg struct {
 	ScaleId int64
 }
 
+type ModbusServiceInfo struct {
+	Id             uint   `json:"Id" gorm:"primaryKey;autoincrement"`
+	TargetModbusId int    `json:"TargetModbusId"`
+	Protocol       string `json:"Protocol"` // "RTU" or "TCP"
+	Port           string `json:"Port"`     // "COM2" or "502"
+	BaudRate       int    `json:"BaudRate"` // 9600
+}
+
 type ScaleMgrRespMsgType string
 
 // 处理公用的回应
@@ -924,6 +959,17 @@ const (
 	SCALE_MGR_RESP_CAL_LOG_ADD   ScaleMgrRespMsgType = "resp_cal_log_add"   //新增校准日志记录
 	SCALE_MGR_RESP_SCALE_LOG_ADD ScaleMgrRespMsgType = "resp_scale_log_add" //新增称重日志记录
 
+	SCALE_MGR_RESP_ADD_RAW_TYPE    ScaleMgrRespMsgType = "resp_add_raw_type"
+	SCALE_MGR_RESP_DEL_RAW_TYPE    ScaleMgrRespMsgType = "resp_del_raw_type"
+	SCALE_MGR_RESP_EDIT_RAW_TYPE   ScaleMgrRespMsgType = "resp_edit_raw_type"
+	SCALE_MGR_RESP_GET_RAW_TYPE    ScaleMgrRespMsgType = "resp_get_raw_type"
+
+	// Modbus
+	SCALE_MGR_RESP_MODBUS_SERVICES ScaleMgrRespMsgType = "resp_modbus_services"
+	SCALE_MGR_RESP_MODBUS_ADD      ScaleMgrRespMsgType = "resp_modbus_add"
+	SCALE_MGR_RESP_MODBUS_EDIT     ScaleMgrRespMsgType = "resp_modbus_edit"
+	SCALE_MGR_RESP_MODBUS_DEL      ScaleMgrRespMsgType = "resp_modbus_del"
+
 	SCALE_MGR_RESP_DEL_SYS_LOG   ScaleMgrRespMsgType = "resp_del_sys_log"   //删除系统日志记录
 	SCALE_MGR_RESP_DEL_CAL_LOG   ScaleMgrRespMsgType = "resp_del_cal_log"   //删除校准日志记录
 	SCALE_MGR_RESP_DEL_SCALE_LOG ScaleMgrRespMsgType = "resp_del_scale_log" //删除称重日志记录
@@ -979,6 +1025,7 @@ type ScaleConnMedia struct { // connection information will be stored in databas
 	InnerModel   string //内部机种名
 	ProtocolName string //协议名
 
+	ModbusId int // 关联的 Modbus 从机站号 (0 表示未分配)
 }
 
 // 服务与秤的关系，哪些服务管理哪些秤

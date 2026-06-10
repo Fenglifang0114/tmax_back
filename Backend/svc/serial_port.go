@@ -244,27 +244,42 @@ func (ph *PacketHandler) HandleData(data []byte) {
 	// 将新数据添加到缓冲区
 	ph.buffer = append(ph.buffer, data...)
 
-	// 根据模式处理组包
+	// 尝试解析 Modbus 格式（所有模式下都优先尝试，因为它有严格的 CRC 校验，不会误伤其他数据）
+	originalLen := len(ph.buffer)
+	ph.processModbusPackets()
+
+	// 如果成功处理了 Modbus 包，直接返回，剩下的等下一波
+	if len(ph.buffer) < originalLen {
+		return
+	}
+
+	// 根据模式处理剩余的数据
 	switch ph.mode {
 	case PacketModeHeaderTail:
 		ph.processHeaderTailPackets()
 	case PacketModeLine:
-		// 行模式下，先尝试解析Modbus格式
-		originalLen := len(ph.buffer)
-		ph.processModbusPackets()
-
-		// 如果缓冲区没有变化或还有剩余数据，再按行模式处理
-		if len(ph.buffer) == originalLen || len(ph.buffer) > 0 {
-			ph.processLinePackets()
-		}
-		// ph.processLinePackets()
+		ph.processLinePackets()
 	default:
-		// 如果没有指定组包模式，直接作为一包输出
+		// 如果没有指定组包模式
 		if len(ph.buffer) > 0 {
-			packet := make([]byte, len(ph.buffer))
-			copy(packet, ph.buffer)
-			ph.packets <- packet
-			ph.buffer = ph.buffer[:0]
+			// 启发式检查：如果是有效的从机地址和功能码，可能是一个未收完的 modbus 包
+			if len(ph.buffer) >= 2 && ph.buffer[0] >= 1 && ph.buffer[0] <= 247 && 
+			   (ph.buffer[1] <= 6 || ph.buffer[1] == 0x0F || ph.buffer[1] == 0x10) {
+				// 可能是没收完的 modbus 包，保留 buffer 等待下一批数据
+				// 防护：如果太长肯定不是合法的 modbus 帧，清空
+				if len(ph.buffer) > 256 {
+					packet := make([]byte, len(ph.buffer))
+					copy(packet, ph.buffer)
+					ph.packets <- packet
+					ph.buffer = ph.buffer[:0]
+				}
+			} else {
+				// 不是 modbus 包特征，直接作为 raw 包输出并清空
+				packet := make([]byte, len(ph.buffer))
+				copy(packet, ph.buffer)
+				ph.packets <- packet
+				ph.buffer = ph.buffer[:0]
+			}
 		}
 	}
 }
@@ -656,6 +671,9 @@ func (sp *SerialPort) readLoop() {
 		if n > 0 {
 			data := make([]byte, n)
 			copy(data, buffer[:n])
+			
+			// 打印串口原始接收数据，方便调试
+			fmt.Printf("【串口 %s 原始接收】 %X\n", sp.config.Name, data)
 
 			// 发送到原始数据通道
 			select {
@@ -1098,7 +1116,7 @@ func (sm *SrvMgr) registerDefaultHandlers() {
 	// Modbus 处理器
 	sm.RegisterSerialHandler("modbus", func(msg *SerialDataMessage) {
 		if msg.Type == "packet" && len(msg.Data) >= 2 {
-
+			fmt.Printf("【Modbus 处理器收到完整包】 %X\n", msg.Data)
 			// 解析 Modbus 功能
 			functionCode := msg.Data[1] //01 是读取， 05 是写入
 			if functionCode == 0x01 {
@@ -1112,6 +1130,9 @@ func (sm *SrvMgr) registerDefaultHandlers() {
 				}
 			} else if functionCode == 0x05 {
 				mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: "resp_open_output_port", MsgBody: "ok"}
+			} else if functionCode == 0x03 {
+				// 测试：收到 01 03 00 00 00 01 84 0A 时回复特定数据以建立连接
+				sm.WriteSerial([]byte{0x01, 0x03, 0x02, 0x19, 0x98, 0xB2, 0x7E})
 			} else {
 				return
 			}
@@ -1611,6 +1632,7 @@ func (ph *PacketHandler) processModbusPackets() {
 
 		// 验证CRC校验
 		if ph.verifyModbusCRC(packet) {
+			fmt.Printf("【Modbus CRC校验通过,成功提取】 %X\n", packet)
 			// CRC验证通过，发送数据包
 			ph.packets <- packet
 			// 移除已处理的数据
@@ -1634,8 +1656,8 @@ func (ph *PacketHandler) getModbusPacketLength(functionCode byte, buffer []byte)
 		dataLen := int(buffer[2]) // 第3个字节是数据长度
 		return 3 + dataLen + 2    // 地址+功能码+长度字节 + 数据 + CRC
 
-	case 0x05:
-		// 写单个线圈/寄存器的请求或响应：固定8字节
+	case 0x03, 0x05:
+		// 读保持寄存器请求（03）或写单个线圈的请求/响应（05）：固定8字节
 		return 8
 
 	case 0x02:

@@ -138,6 +138,11 @@ type Scale struct {
 	// scale serial number, if not supported then the default serial number is "123456789"
 	ScaleCat m.ScaleCat // scale type: C51, T2200, JWP, TMAX
 	Sn       string
+	// 最新收到的重量，用于 Modbus 网关查询
+	LastWeight float32
+	// 用于 Modbus S15 标定
+	ModbusCalWeightMSB uint16
+	ModbusCalWeight    float32
 	// send to scale channel, message will be json string
 	toScaleMsgCh chan string
 	// receive from scale channel, message will be json string
@@ -4493,6 +4498,24 @@ func sendMsgIntoChsOrWeightToClient(s *Scale, msg *ScaleRespMsg) {
 			ch <- msg
 		}
 	}
+
+	// 记录最新重量用于 Modbus 快速查询
+	if msg.MsgType == m.WEIGHT_DATA {
+		if weightMsg, ok := msg.MsgBody.(WeightMsg); ok {
+			if fVal, err := strconv.ParseFloat(weightMsg.WeightVal, 32); err == nil {
+				s.LastWeight = float32(fVal)
+			}
+		} else if strMsg, ok := msg.MsgBody.(string); ok {
+			// TMax scale sends JSON string
+			var wMsg WeightMsg
+			if err := json.UnmarshalFromString(strMsg, &wMsg); err == nil {
+				if fVal, err := strconv.ParseFloat(wMsg.WeightVal, 32); err == nil {
+					s.LastWeight = float32(fVal)
+				}
+			}
+		}
+	}
+
 	if msg.MsgType == m.WEIGHT_DATA && s.isSendUnolicitedData && s.client != nil { // skip sending weight data to client if it doesn't not register this message
 		sendRespMsgClient(s, msg)
 		return

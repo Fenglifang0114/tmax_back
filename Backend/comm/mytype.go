@@ -142,6 +142,10 @@ const (
 	CMD_ASK_ROM_VERSION
 	CMD_SET_SERIAL_PORT
 	CMD_GET_SERIAL_PORT
+	CMD_GET_GROSS_WEIGHT
+	CMD_GET_NET_WEIGHT
+	CMD_GET_TARE_WEIGHT
+	CMD_GET_PRE_TARE_WEIGHT
 )
 
 type DataType int
@@ -322,6 +326,10 @@ const (
 	REMOVE_SOFT_SEAL_ONCE_RESP RespMsgType = "resp_remove_soft_seal_once"
 	SET_SERIAL_PORT_RESP       RespMsgType = "resp_set_serial_port"
 	GET_SERIAL_PORT_RESP       RespMsgType = "resp_get_serial_port"
+	GET_GROSS_WEIGHT_RESP      RespMsgType = "resp_get_gross_weight"
+	GET_NET_WEIGHT_RESP        RespMsgType = "resp_get_net_weight"
+	GET_TARE_WEIGHT_RESP       RespMsgType = "resp_get_tare_weight"
+	GET_PRE_TARE_WEIGHT_RESP   RespMsgType = "resp_get_pre_tare_weight"
 
 	CLOSE_SERVER_CMD_RESP          RespMsgType = "resp_close_server_cmd"
 	DIS_BT_CMD_RESP                RespMsgType = "resp_dis_bt_cmd"

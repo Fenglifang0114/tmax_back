@@ -2,7 +2,6 @@ package svc
 
 import (
 	"fmt"
-
 	"strconv"
 	"sync"
 	"time"
@@ -139,6 +138,19 @@ func init() {
 
 	createScaleSrvListNotifier := scaleSrvListNotifier{}
 	scaleSrvList.Register(createScaleSrvListNotifier)
+
+	// Modbus
+	createGetModbusSrvNotifier := getModbusServicesNotifier{}
+	getModbusServices.Register(createGetModbusSrvNotifier)
+
+	createAddModbusSrvNotifier := addModbusServiceNotifier{}
+	addModbusService.Register(createAddModbusSrvNotifier)
+
+	createEditModbusSrvNotifier := editModbusServiceNotifier{}
+	editModbusService.Register(createEditModbusSrvNotifier)
+
+	createDelModbusSrvNotifier := delModbusServiceNotifier{}
+	delModbusService.Register(createDelModbusSrvNotifier)
 
 	createsetScaleSrvValNotifier := setScaleSrvValNotifier{}
 	setScaleSrvVal.Register(createsetScaleSrvValNotifier)
@@ -486,6 +498,12 @@ type scaleSrvListNotifier struct{}
 type setScaleSrvValNotifier struct{}
 
 type doServiceActionNotifier struct{}
+
+// Modbus Notifiers
+type getModbusServicesNotifier struct{}
+type addModbusServiceNotifier struct{}
+type editModbusServiceNotifier struct{}
+type delModbusServiceNotifier struct{}
 
 type addRawTypeNotifier struct{}
 
@@ -1242,7 +1260,7 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		var conf MediaConf = MediaConf{}
 		conf.Type = MEDIA_COM
 		conf.MediaInfoJson, _ = json.MarshalToString(comInfo)
-		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: "T-Max", ScaleSn: getSn(), TMedia: MEDIA_COM, MediaConf: conf, IsDefault: true, ScaleName: scaleName}
+		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: "T-Max", ScaleSn: getSn(), TMedia: MEDIA_COM, MediaConf: conf, IsDefault: true, ScaleName: scaleName, ModbusId: req.ModbusId}
 		s.connPb.connPb.InsertScaleConn(*scaleConn)
 		s.AddMediaList(scaleConn.ScaleId, *scaleConn)
 
@@ -1300,7 +1318,7 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		var conf MediaConf = MediaConf{}
 		conf.Type = MEDIA_BT
 		conf.MediaInfoJson, _ = json.MarshalToString(btInfo)
-		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: "T-Max", ScaleSn: getSn(), TMedia: MEDIA_BT, MediaConf: conf, IsDefault: true, ScaleName: scaleName}
+		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: "T-Max", ScaleSn: getSn(), TMedia: MEDIA_BT, MediaConf: conf, IsDefault: true, ScaleName: scaleName, ModbusId: req.ModbusId}
 		s.connPb.connPb.InsertScaleConn(*scaleConn)
 		s.AddMediaList(scaleConn.ScaleId, *scaleConn)
 
@@ -1360,6 +1378,7 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 	conn.IsOnline = true
 	conn.ScaleCat = comm.SCALE_TMAX
 	conn.ScaleName = "Scale" + strconv.FormatInt(conn.ScaleId, 10)
+	conn.ModbusId = req.ModbusId
 
 	var scale *Scale
 
@@ -1488,6 +1507,7 @@ func (s *ScaleMgr) UpdateScale(req ReqModifyScale) error {
 	}
 
 	conn.MediaConf = req.MediaConf
+	conn.ModbusId = req.ModbusId
 
 	s.scales[id].ModifyMedia(req.MediaConf)
 	s.srvMgr.scaleMgr.ModifyMediaList(id, conn.MediaConf)
@@ -1557,4 +1577,73 @@ func (s *ScaleMgr) InsertScaleRec(rec ScaleRec) error {
 
 func (s *ScaleMgr) DeleteScaleRec(recId uint) error {
 	return s.recPb.DeleteRec(recId)
+}
+
+// Modbus Service Handlers
+func (p getModbusServicesNotifier) Handle(scaleMgr *ScaleMgr) {
+	log.Log.Debug("Handle getModbusServicesNotifier called")
+	pb := NewModbusServiceProvider()
+	services, err := pb.GetModbusServiceList()
+	if err != nil {
+		log.Log.Errorf("Error getting modbus services: %v", err)
+	}
+	jsonStr, _ := json.MarshalToString(services)
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_MODBUS_SERVICES, MsgBody: jsonStr}
+}
+
+func (p addModbusServiceNotifier) Handle(payload ReqAddModbusService) {
+	log.Log.Debug("Handle addModbusServiceNotifier called")
+	pb := NewModbusServiceProvider()
+	service := ModbusServiceInfo{
+		TargetModbusId: payload.TargetModbusId,
+		Protocol:       payload.Protocol,
+		Port:           payload.Port,
+		BaudRate:       payload.BaudRate,
+	}
+	if err := pb.InsertModbusService(&service); err != nil {
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_MODBUS_ADD, MsgBody: err.Error()}
+		return
+	}
+
+	// 启动对应的 Modbus 网关服务
+	if mSrvMgr != nil && mSrvMgr.ModbusGateway != nil {
+		mSrvMgr.ModbusGateway.StartService(service)
+	}
+
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_MODBUS_ADD, MsgBody: "ok"}
+}
+
+func (p editModbusServiceNotifier) Handle(payload ReqEditModbusService) {
+	log.Log.Debug("Handle editModbusServiceNotifier called")
+	pb := NewModbusServiceProvider()
+	service := ModbusServiceInfo{
+		Id:             payload.Id,
+		TargetModbusId: payload.TargetModbusId,
+		Protocol:       payload.Protocol,
+		Port:           payload.Port,
+		BaudRate:       payload.BaudRate,
+	}
+	if err := pb.UpdateModbusService(service); err != nil {
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_MODBUS_EDIT, MsgBody: err.Error()}
+		return
+	}
+
+	if mSrvMgr != nil && mSrvMgr.ModbusGateway != nil {
+		mSrvMgr.ModbusGateway.StartService(service) // 重新启动该服务
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_MODBUS_EDIT, MsgBody: "ok"}
+}
+
+func (p delModbusServiceNotifier) Handle(payload ReqDelModbusService) {
+	log.Log.Debug("Handle delModbusServiceNotifier called")
+	pb := NewModbusServiceProvider()
+	if err := pb.DeleteModbusService(payload.Id); err != nil {
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_MODBUS_DEL, MsgBody: err.Error()}
+		return
+	}
+
+	if mSrvMgr != nil && mSrvMgr.ModbusGateway != nil {
+		mSrvMgr.ModbusGateway.StopService(payload.Id)
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_MODBUS_DEL, MsgBody: "ok"}
 }

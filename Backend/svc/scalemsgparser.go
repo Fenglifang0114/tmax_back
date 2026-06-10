@@ -137,15 +137,19 @@ func init() {
 		cmd.CMDID_SET_GRAVITY_ACCEL_TMAX: m.SET_GRAV_ACC_RESP,
 		cmd.CMDID_GET_GRAVITY_ACCEL_TMAX: m.GET_GRAV_ACC_RESP,
 
-		cmd.CMDID_SET_WGT_UNIT_TMAX: m.SET_WEIGHT_UNIT_RESP,
-		cmd.CMDID_GET_WGT_UNIT_TMAX: m.GET_WEIGHT_UNIT_RESP,
+		cmd.CMDID_SET_WGT_UNIT_TMAX:        m.SET_WEIGHT_UNIT_RESP,
+		cmd.CMDID_GET_WGT_UNIT_TMAX:        m.GET_WEIGHT_UNIT_RESP,
+		cmd.CMDID_GET_GROSS_WEIGHT_TMAX:    m.GET_GROSS_WEIGHT_RESP,
+		cmd.CMDID_GET_NET_WEIGHT_TMAX:      m.GET_NET_WEIGHT_RESP,
+		cmd.CMDID_GET_TARE_WEIGHT_TMAX:     m.GET_TARE_WEIGHT_RESP,
+		cmd.CMDID_GET_PRE_TARE_WEIGHT_TMAX: m.GET_PRE_TARE_WEIGHT_RESP,
 
 		cmd.CMDID_GET_SEAL_STATUS_TMAX:      m.GET_SEAL_STATUS_RESP,
 		cmd.CMDID_SET_SOFT_SEAL_TMAX:        m.SOFT_SEAL_RESP,
 		cmd.CMDID_REMOVE_SOFT_SEAL_TMAX:     m.REMOVE_SOFT_SEAL_RESP,
 		cmd.CMDID_REMOVE_SOFT_SEAL_ONCE_TMX: m.REMOVE_SOFT_SEAL_ONCE_RESP,
 
-		cmd.CMDID_SET_SERIAL_PORT_TMAX: m.SET_SERIAL_PORT_RESP,
+		// cmd.CMDID_SET_SERIAL_PORT_TMAX: m.SET_SERIAL_PORT_RESP,
 		cmd.CMDID_GET_SERIAL_PORT_TMAX: m.GET_SERIAL_PORT_RESP,
 
 		cmd.CMDID_GET_MODEL_TMAX: m.GET_MODEL_RESP,
@@ -226,6 +230,10 @@ func init() {
 		m.GET_GADUATION2_VALUE_RESP: handleGetGaduation2ValueResp,
 		m.SET_WEIGHT_UNIT_RESP:      handleSetWeightUnitResp,
 		m.GET_WEIGHT_UNIT_RESP:      handleGetWeightUnitResp,
+		m.GET_GROSS_WEIGHT_RESP:     handleGetGrossWeightResp,
+		m.GET_NET_WEIGHT_RESP:       handleGetNetWeightResp,
+		m.GET_TARE_WEIGHT_RESP:      handleGetTareWeightResp,
+		m.GET_PRE_TARE_WEIGHT_RESP:  handleGetPreTareWeightResp,
 		m.SET_INITIAL_ZERO_RESP:     handleSetInitialZeroResp,
 		m.SET_MANUAL_ZERO_RESP:      handleSetManualZeroResp,
 		m.SET_ZERO_TRACKING_RESP:    handleSetZeroTrackingResp,
@@ -963,6 +971,40 @@ func handleGetWeightUnitResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
 
 	value := int(data[0])
 	return ScaleRespMsg{ScaleId: scaleId, MsgType: m.GET_WEIGHT_UNIT_RESP, MsgBody: fmt.Sprintf("%d", value)}, len(data)
+}
+
+func handleGetGrossWeightResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
+	return parseWeightFloatResp(scaleId, m.GET_GROSS_WEIGHT_RESP, data)
+}
+
+func handleGetNetWeightResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
+	return parseWeightFloatResp(scaleId, m.GET_NET_WEIGHT_RESP, data)
+}
+
+func handleGetTareWeightResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
+	return parseWeightFloatResp(scaleId, m.GET_TARE_WEIGHT_RESP, data)
+}
+
+func handleGetPreTareWeightResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
+	return parseWeightFloatResp(scaleId, m.GET_PRE_TARE_WEIGHT_RESP, data)
+}
+
+func parseWeightFloatResp(scaleId int64, msgType m.RespMsgType, data []byte) (ScaleRespMsg, int) {
+	if len(data) == 0 {
+		return ScaleRespMsg{ScaleId: scaleId, MsgType: msgType, MsgBody: "fail"}, len(data)
+	}
+
+	// Remove any null terminators and whitespace
+	strVal := strings.TrimRight(string(data), "\x00")
+	strVal = strings.TrimSpace(strVal)
+
+	// Validate if it's a parseable float
+	_, err := strconv.ParseFloat(strVal, 32)
+	if err != nil {
+		return ScaleRespMsg{ScaleId: scaleId, MsgType: msgType, MsgBody: "fail"}, len(data)
+	}
+
+	return ScaleRespMsg{ScaleId: scaleId, MsgType: msgType, MsgBody: strVal}, len(data)
 }
 
 func handleSetGaduation1ValueResp(scaleId int64, data []byte) (ScaleRespMsg, int) {

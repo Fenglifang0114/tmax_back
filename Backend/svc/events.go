@@ -2595,3 +2595,68 @@ func (u UpdateInputPort) Trigger(mgr *SrvMgr, payload []ReqUpdateInputPort) {
 		go handler.Handle(mgr, payload)
 	}
 }
+
+// Modbus Events
+var getModbusServices GetModbusServices
+
+type GetModbusServices struct {
+	handlers []interface{ Handle(scaleMgr *ScaleMgr) }
+}
+
+func (u *GetModbusServices) Register(handler interface{ Handle(payload *ScaleMgr) }) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u GetModbusServices) Trigger(payload *ScaleMgr) {
+	for _, handler := range u.handlers {
+		go handler.Handle(payload)
+	}
+}
+
+var addModbusService AddModbusService
+
+type AddModbusService struct {
+	handlers []interface{ Handle(payload ReqAddModbusService) }
+}
+
+func (u *AddModbusService) Register(handler interface{ Handle(payload ReqAddModbusService) }) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u AddModbusService) Trigger(payload ReqAddModbusService) {
+	for _, handler := range u.handlers {
+		go handler.Handle(payload)
+	}
+}
+
+var editModbusService EditModbusService
+
+type EditModbusService struct {
+	handlers []interface{ Handle(payload ReqEditModbusService) }
+}
+
+func (u *EditModbusService) Register(handler interface{ Handle(payload ReqEditModbusService) }) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u EditModbusService) Trigger(payload ReqEditModbusService) {
+	for _, handler := range u.handlers {
+		go handler.Handle(payload)
+	}
+}
+
+var delModbusService DelModbusService
+
+type DelModbusService struct {
+	handlers []interface{ Handle(payload ReqDelModbusService) }
+}
+
+func (u *DelModbusService) Register(handler interface{ Handle(payload ReqDelModbusService) }) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u DelModbusService) Trigger(payload ReqDelModbusService) {
+	for _, handler := range u.handlers {
+		go handler.Handle(payload)
+	}
+}

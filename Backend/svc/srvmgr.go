@@ -114,6 +114,9 @@ type SrvMgr struct {
 
 	// 是否自动打开串口
 	autoOpenSerial bool
+
+	// Modbus 网关管理器
+	ModbusGateway *ModbusGatewayManager
 }
 
 var SrvIdList []int64 = []int64{999999999}
@@ -242,6 +245,10 @@ func NewSrvMgr(scaleMgr *ScaleMgr, quitch chan bool) *SrvMgr {
 
 	// 注册默认处理器
 	sm.registerDefaultHandlers()
+
+	// 初始化并启动 Modbus 网关
+	sm.ModbusGateway = NewModbusGatewayManager(sm)
+	sm.ModbusGateway.StartAll()
 
 	// 如果配置了自动打开，则打开串口
 
@@ -596,6 +603,29 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 			l.Log.Error(err)
 		} else {
 			UserAdded.Trigger(userAdded, scaleMgr.srvMgr, data)
+		}
+	case REQ_GET_MODBUS_SERVICES:
+		getModbusServices.Trigger(scaleMgr)
+	case REQ_ADD_MODBUS_SERVICE:
+		var data ReqAddModbusService
+		if err := json.UnmarshalFromString(req.ReqData, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			addModbusService.Trigger(data)
+		}
+	case REQ_EDIT_MODBUS_SERVICE:
+		var data ReqEditModbusService
+		if err := json.UnmarshalFromString(req.ReqData, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			editModbusService.Trigger(data)
+		}
+	case REQ_DEL_MODBUS_SERVICE:
+		var data ReqDelModbusService
+		if err := json.UnmarshalFromString(req.ReqData, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			delModbusService.Trigger(data)
 		}
 	case REQ_DEL_USER:
 		jsonStr := req.ReqData
