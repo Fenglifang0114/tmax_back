@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	m "tmaxsrv/comm"
+	"tmaxsrv/picker"
 
 	"go.bug.st/serial"
 )
@@ -25,8 +26,7 @@ func (c *Scale) ProcessUpdate(srecName string) (*ScaleRespMsg, error) {
 	mode.BaudRate = 57600
 	port, err := serial.Open(c.Pcnf.DevPath, &mode)
 	if err != nil {
-		respMsg := ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail", ScaleId: c.Id}
-		port.Close()
+		respMsg := ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail,open serial port error", ScaleId: c.Id}
 		return &respMsg, err
 	}
 
@@ -34,7 +34,7 @@ func (c *Scale) ProcessUpdate(srecName string) (*ScaleRespMsg, error) {
 	srecData, err := SRECToByteArray(srecName)
 	if err != nil {
 		port.Close()
-		return &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail", ScaleId: c.Id}, err
+		return &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail,srec data error", ScaleId: c.Id}, err
 	}
 	// 执行升级流程
 	upgrader := NewUpgrader(c, port)
@@ -42,7 +42,7 @@ func (c *Scale) ProcessUpdate(srecName string) (*ScaleRespMsg, error) {
 	_, err = upgrader.PerformUpgrader(srecData)
 	if err != nil {
 		log.Printf("外部调用捕获到错误: %v", err) // 添加日志
-		respMsg := ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail", ScaleId: c.Id}
+		respMsg := ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail,upgrade failed", ScaleId: c.Id}
 		port.Close()
 		return &respMsg, err
 	}
@@ -56,8 +56,18 @@ func (c *Scale) TmaxUpdateFirmware(srecName string) (*ScaleRespMsg, error) {
 	var resp *ScaleRespMsg
 	var err error
 
-	pickerFn := c.MySerial.pickerFn
-	c.MySerial.Close()
+	if c.Conn.TMedia != MEDIA_COM {
+		return &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail,only support serial port update", ScaleId: c.Id}, nil
+	}
+
+	var pickerFn picker.PickerFunc
+	if c.MySerial != nil {
+		pickerFn = c.MySerial.pickerFn
+		c.MySerial.Close()
+	} else {
+		// 如果因为某些原因 MySerial 为空，我们提供一个默认的解析函数以防止再次崩溃
+		pickerFn = picker.GetPickerFn(c.ScaleCat)
+	}
 
 	//关闭串口，将串口让出去
 	resp, _ = c.ProcessUpdate(srecName)
@@ -67,7 +77,9 @@ func (c *Scale) TmaxUpdateFirmware(srecName string) (*ScaleRespMsg, error) {
 	}
 
 	result, _ := json.Marshal(resp)
-	c.client.sendCh <- result
+	if c.client != nil {
+		c.client.sendCh <- result
+	}
 
 	return resp, nil
 }

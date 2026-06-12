@@ -11,13 +11,14 @@ type ModbusGatewayManager struct {
 	mu          sync.Mutex
 	srvMgr      *SrvMgr
 	rtuServers  map[uint]*ModbusRTUServer // key is ModbusServiceInfo.Id
-	// tcpServers  map[uint]*ModbusTCPServer // TODO: for TCP
+	tcpServers  map[uint]*ModbusTCPServer // key is ModbusServiceInfo.Id
 }
 
 func NewModbusGatewayManager(srvMgr *SrvMgr) *ModbusGatewayManager {
 	return &ModbusGatewayManager{
 		srvMgr:     srvMgr,
 		rtuServers: make(map[uint]*ModbusRTUServer),
+		tcpServers: make(map[uint]*ModbusTCPServer),
 	}
 }
 
@@ -44,6 +45,10 @@ func (m *ModbusGatewayManager) StopAll() {
 		server.Stop()
 		delete(m.rtuServers, id)
 	}
+	for id, server := range m.tcpServers {
+		server.Stop()
+		delete(m.tcpServers, id)
+	}
 }
 
 // StartService 启动单个服务
@@ -55,11 +60,11 @@ func (m *ModbusGatewayManager) StartService(info ModbusServiceInfo) {
 	if server, ok := m.rtuServers[info.Id]; ok {
 		if server.info.TargetModbusId == info.TargetModbusId && server.info.Protocol == info.Protocol && server.info.Port == info.Port && server.info.BaudRate == info.BaudRate {
 			// 检查串口是否真的还是开着的（防止假死）
-			log.Log.Infof("Modbus service %d configuration unchanged, skipping restart", info.Id)
+			log.Log.Infof("Modbus RTU service %d configuration unchanged, skipping restart", info.Id)
 			return
 		}
 		
-		log.Log.Infof("Modbus service %d config changed! Old: (Port:%s, Baud:%d, ID:%d, Proto:%s), New: (Port:%s, Baud:%d, ID:%d, Proto:%s). Restarting...", 
+		log.Log.Infof("Modbus RTU service %d config changed! Old: (Port:%s, Baud:%d, ID:%d, Proto:%s), New: (Port:%s, Baud:%d, ID:%d, Proto:%s). Restarting...", 
 			info.Id, 
 			server.info.Port, server.info.BaudRate, server.info.TargetModbusId, server.info.Protocol,
 			info.Port, info.BaudRate, info.TargetModbusId, info.Protocol)
@@ -68,6 +73,17 @@ func (m *ModbusGatewayManager) StartService(info ModbusServiceInfo) {
 		delete(m.rtuServers, info.Id)
 		// 必须延迟等待系统完全释放串口，否则紧接着的 Start 会报“拒绝访问”而失败，导致串口假性释放！
 		time.Sleep(500 * time.Millisecond)
+	}
+
+	if server, ok := m.tcpServers[info.Id]; ok {
+		if server.info.TargetModbusId == info.TargetModbusId && server.info.Protocol == info.Protocol && server.info.Port == info.Port {
+			log.Log.Infof("Modbus TCP service %d configuration unchanged, skipping restart", info.Id)
+			return
+		}
+		log.Log.Infof("Modbus TCP service %d config changed! Restarting...", info.Id)
+		server.Stop()
+		delete(m.tcpServers, info.Id)
+		time.Sleep(200 * time.Millisecond)
 	}
 	m.startServiceInternal(info)
 }
@@ -82,7 +98,13 @@ func (m *ModbusGatewayManager) startServiceInternal(info ModbusServiceInfo) {
 		m.rtuServers[info.Id] = server
 		log.Log.Infof("Modbus RTU Server started [Port: %s, Baud: %d]", info.Port, info.BaudRate)
 	} else if info.Protocol == "Modbus TCP" || info.Protocol == "TCP" {
-		log.Log.Warnf("Modbus TCP Server is not yet implemented [Port: %s]", info.Port)
+		server := NewModbusTCPServer(info, m.srvMgr)
+		if err := server.Start(); err != nil {
+			log.Log.Errorf("Failed to start Modbus TCP Server [Port: %s]: %v", info.Port, err)
+			return
+		}
+		m.tcpServers[info.Id] = server
+		log.Log.Infof("Modbus TCP Server started [Port: %s]", info.Port)
 	}
 }
 
@@ -94,6 +116,11 @@ func (m *ModbusGatewayManager) StopService(id uint) {
 		server.Stop()
 		delete(m.rtuServers, id)
 		log.Log.Infof("Modbus RTU Server stopped [ID: %d]", id)
+	}
+	if server, ok := m.tcpServers[id]; ok {
+		server.Stop()
+		delete(m.tcpServers, id)
+		log.Log.Infof("Modbus TCP Server stopped [ID: %d]", id)
 	}
 }
 

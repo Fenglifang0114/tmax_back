@@ -2,7 +2,6 @@ package svc
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -11,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	m "tmaxsrv/comm"
 
@@ -215,7 +213,8 @@ func (u *Upgrader) PerformUpgrader(srecData []byte) (*ScaleRespMsg, error) {
 // enterUpgradeMode 进入升级模式（修复通道关闭引发的panic）
 func (u *Upgrader) enterUpgradeMode() error {
 	initCmd := []byte{0x02, 0xff, 0x00}
-	expectedResp := []byte{0x00, 0xff, 0x08}
+	// expectedResp := []byte{0x00, 0xff, 0x08}
+	expectedResp := []byte{0x03, 0xff, 0x08}
 	timeout := 50 * time.Second
 	successChan := make(chan struct{}, 1)
 	done := make(chan struct{})
@@ -436,155 +435,101 @@ func (u *Upgrader) transferAndWriteFirmware(srecData []byte) error {
 	return nil
 }
 
-// processBlock 处理固件块传输
+// processBlock 处理固件块传输 (同步等待回复)
 func (u *Upgrader) processBlock(firmwareData []byte, blockIndex, blockSize, segmentSize, segmentCount, maxRetries int) error {
 	blockData, err := u.prepareBlockData(firmwareData, blockIndex, blockSize)
 	if err != nil {
 		return err
 	}
 
-	// 段状态跟踪（使用原子操作确保线程安全）
-	segmentsReceived := make([]byte, segmentCount)
-	var segmentsReceivedCnt int32 = 0
-	var sendError error
-	var receiveError error
+	for segIdx := 0; segIdx < segmentCount; segIdx++ {
+		successFlag := false
+		var lastError error
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	// 创建上下文用于控制超时
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// 用于累积接收数据的缓冲区
-	var buffer []byte
-	var bufferMutex sync.Mutex
-
-	// 启动段发送协程
-	go func() {
-		defer wg.Done()
-		defer cancel() // 发送完成后取消上下文
-
-		for retryCount := 0; retryCount < maxRetries; retryCount++ {
-			// 检查是否所有段都已接收
-			if atomic.LoadInt32(&segmentsReceivedCnt) >= int32(segmentCount) {
-				// log.Println("所有段已确认，退出发送协程")
-				return
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			err := u.sendSegment(blockData, segIdx, segmentSize)
+			if err != nil {
+				return fmt.Errorf("send segment %d failed: %v", segIdx, err)
 			}
 
-			// 遍历所有段，发送未确认的段
-			hasUnsent := false
-			for segIdx := 0; segIdx < segmentCount; segIdx++ {
-				if segmentsReceived[segIdx] == 0x0 {
-					hasUnsent = true
-					err := u.sendSegment(blockData, segIdx, segmentSize)
-					if err != nil {
-						sendError = fmt.Errorf("send segment %d failed: %v", segIdx, err)
-						// log.Fatal(sendError)
-						log.Println("发送段失败，退出发送协程")
-						return
+			// 同步等待当前段的 0x06 回复
+			var buffer []byte
+			timeout := time.NewTimer(300 * time.Millisecond) // 设置合适的超时时间
+
+		receiveLoop:
+			for {
+				select {
+				case resp, ok := <-u.receiveChan:
+					if !ok {
+						lastError = fmt.Errorf("接收通道已关闭")
+						break receiveLoop
 					}
-				}
-				time.Sleep(3 * time.Millisecond) // 控制发送速率
-			}
+					if !timeout.Stop() {
+						<-timeout.C
+					}
+					timeout.Reset(300 * time.Millisecond)
 
-			if !hasUnsent {
-				log.Println("没有未发送的段，退出发送协程")
-				return
-			}
-
-			// 等待一段时间再重试
-			time.Sleep(10 * time.Millisecond) // 减少重试间隔，提高响应速度
-		}
-
-		sendError = fmt.Errorf("send segment failed %d", maxRetries)
-		// log.Fatal(sendError)
-	}()
-
-	// 接收确认协程 - 修改部分
-	go func() {
-		defer wg.Done()
-		defer cancel() // 接收完成后取消上下文
-
-		for {
-			select {
-			case resp := <-u.receiveChan:
-				if len(resp) > 0 {
-					bufferMutex.Lock()
 					buffer = append(buffer, resp...)
-					bufferMutex.Unlock()
 
-					// 处理缓冲区中的数据
-					for {
-						bufferMutex.Lock()
-						if len(buffer) < 10 { // 至少需要10个字节才能包含完整响应
-							bufferMutex.Unlock()
-							break
-						}
-
-						// 检查是否有完整的帧（假设帧长度为5字节）
-						if validateFrame(buffer) && buffer[3] == 0x43 {
-							// 处理帧
-							segmentNum := int(buffer[4])
-							if segmentNum >= segmentCount {
-								log.Printf("收到无效段号: %d", segmentNum)
-							} else if segmentsReceived[segmentNum] == 0x0 {
-								segmentsReceived[segmentNum] = 0x1
-								cnt := atomic.AddInt32(&segmentsReceivedCnt, 1)
-								//log.Println(hex.EncodeToString(buffer))
-								// log.Println("Segment ", segmentNum, " 已收到 (", cnt, "/", segmentCount, ")")
-								if cnt >= int32(segmentCount) {
-									//time.Sleep(10 * time.Millisecond)
-									bufferMutex.Unlock()
-									// log.Println("所有段传输完成")
-									return
+					for len(buffer) >= 10 { // 至少需要10个字节
+						if buffer[0] == 0xFE && buffer[1] == 0xFE {
+							expectedLen := int(buffer[2])
+							frameLen := expectedLen + 3
+							if len(buffer) >= frameLen {
+								frame := buffer[:frameLen]
+								if validateFrame(frame) && frame[3] == 0x43 {
+									// 协议没变：秤返回的是段号，不会返回 0x06。
+									segmentNum := int(frame[4])
+									if segmentNum == segIdx {
+										successFlag = true
+										// 从缓冲区移除已处理的帧，并跳出接收循环
+										buffer = buffer[frameLen:]
+										break receiveLoop
+									} else {
+										// 收到非预期的段号，可能是上一次超时的旧回复，忽略之，继续等待
+										// 消费掉这个不需要的帧，继续外层 for len(buffer) >= 10 循环
+										buffer = buffer[frameLen:]
+										continue
+									}
 								}
+							} else {
+								// 长度不够，等待更多数据
+								break
 							}
-
-							// 从缓冲区移除已处理的帧
-							buffer = buffer[10:]
-						} else {
-							// 移除第一个字节继续查找
-							buffer = buffer[1:]
 						}
-						bufferMutex.Unlock()
+						// 找不到有效的帧头，移除第一个字节继续查找
+						buffer = buffer[1:]
 					}
+
+				case err := <-u.errorChan:
+					if !isRecoverableError(err) {
+						return fmt.Errorf("通信错误: %w", err)
+					}
+					lastError = fmt.Errorf("临时通信错误: %v", err)
+					break receiveLoop
+
+				case <-timeout.C:
+					lastError = fmt.Errorf("等待段 %d 响应超时", segIdx)
+					break receiveLoop
+
+				case <-u.stopChan:
+					return fmt.Errorf("升级被用户取消")
 				}
-
-			case err := <-u.errorChan:
-				if !isRecoverableError(err) {
-					receiveError = err
-					return
-				}
-				log.Printf("接收block状态时临时错误: %v", err)
-
-			case <-ctx.Done():
-				receiveError = fmt.Errorf("receive block status timeout ,failed")
-				// log.Fatal(receiveError)
-				return
-
-			case <-u.stopChan:
-				receiveError = fmt.Errorf("failed to receive block status, user terminated")
-				return
 			}
+			timeout.Stop()
+
+			if successFlag {
+				break // 当前段发送成功，退出重试循环，处理下一段
+			}
+
+			// 发送失败或超时，准备重试
+			// log.Printf("段 %d 发送失败，准备重试 (%d/%d): %v", segIdx, attempt+1, maxRetries, lastError)
+			time.Sleep(10 * time.Millisecond)
 		}
-	}()
 
-	// 等待两个协程完成
-	wg.Wait()
-
-	// 检查是否有错误发生
-	if sendError != nil {
-		return sendError
-	}
-	if receiveError != nil {
-		return receiveError
-	}
-
-	// 验证所有段是否都已接收
-	if atomic.LoadInt32(&segmentsReceivedCnt) < int32(segmentCount) {
-		return fmt.Errorf("failed to receive block %d status, received %d segments, need %d segments",
-			blockIndex, segmentsReceivedCnt, segmentCount)
+		if !successFlag {
+			return fmt.Errorf("段 %d 发送失败，达到最大重试次数: %v", segIdx, lastError)
+		}
 	}
 
 	return nil
@@ -880,12 +825,12 @@ func (u *Upgrader) sender() {
 // receiver 接收goroutine（使用环形缓冲区）
 func (u *Upgrader) receiver() {
 	defer u.wg.Done()
+	u.port.SetReadTimeout(100 * time.Millisecond)
 	for {
 		select {
 		case <-u.stopChan:
 			return
 		default:
-			u.port.SetReadTimeout(100 * time.Millisecond)
 			n, err := u.port.Read(u.tmpbuf)
 			if err != nil {
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
