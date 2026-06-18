@@ -165,7 +165,7 @@ func NewUpgrader(c *Scale, port serial.Port) *Upgrader {
 }
 
 // PerformUpgrader 运行升级流程
-func (u *Upgrader) PerformUpgrader(srecData []byte) (*ScaleRespMsg, error) {
+func (u *Upgrader) PerformUpgrader(srecData []byte, expectedBootResp []byte, wrongBootResp []byte) (*ScaleRespMsg, error) {
 	// defer u.stopCommunication()
 
 	var respMsg *ScaleRespMsg
@@ -173,7 +173,7 @@ func (u *Upgrader) PerformUpgrader(srecData []byte) (*ScaleRespMsg, error) {
 	respFail := &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail", ScaleId: u.scale.Id}
 
 	// 步骤 1: 进入升级模式
-	if err := u.enterUpgradeMode(); err != nil {
+	if err := u.enterUpgradeMode(expectedBootResp, wrongBootResp); err != nil {
 		log.Println("Failed to enter upgrade mode: ", err)
 		return respFail, fmt.Errorf("enter upgrade mode failed: %w", err)
 	}
@@ -211,12 +211,12 @@ func (u *Upgrader) PerformUpgrader(srecData []byte) (*ScaleRespMsg, error) {
 }
 
 // enterUpgradeMode 进入升级模式（修复通道关闭引发的panic）
-func (u *Upgrader) enterUpgradeMode() error {
+func (u *Upgrader) enterUpgradeMode(expectedBootResp []byte, wrongBootResp []byte) error {
 	initCmd := []byte{0x02, 0xff, 0x00}
-	// expectedResp := []byte{0x00, 0xff, 0x08}
-	expectedResp := []byte{0x03, 0xff, 0x08}
+	respLen := len(expectedBootResp)
 	timeout := 50 * time.Second
 	successChan := make(chan struct{}, 1)
+	failChan := make(chan error, 1)
 	done := make(chan struct{})
 	var once sync.Once
 
@@ -261,11 +261,12 @@ func (u *Upgrader) enterUpgradeMode() error {
 					buffer = append(buffer, resp...)
 
 					// 检查缓冲区是否包含完整的预期响应
-					if len(buffer) >= len(expectedResp) {
+					if len(buffer) >= respLen {
 						// 查找预期响应的起始位置
 						start := 0
-						for start <= len(buffer)-len(expectedResp) {
-							if bytes.Equal(buffer[start:start+len(expectedResp)], expectedResp) {
+						for start <= len(buffer)-respLen {
+							slice := buffer[start : start+respLen]
+							if bytes.Equal(slice, expectedBootResp) {
 								// 找到完整响应
 								select {
 								case successChan <- struct{}{}:
@@ -275,13 +276,20 @@ func (u *Upgrader) enterUpgradeMode() error {
 								}
 								closeDone()
 								return
+							} else if bytes.Equal(slice, wrongBootResp) {
+								select {
+								case failChan <- fmt.Errorf("程序和boot对应不上"):
+								default:
+								}
+								closeDone()
+								return
 							}
 							start++
 						}
 
 						// 如果缓冲区太长，可以移除前面的数据以避免无限增长
-						if len(buffer) > 2*len(expectedResp) {
-							buffer = buffer[len(buffer)-len(expectedResp):]
+						if len(buffer) > 2*respLen {
+							buffer = buffer[len(buffer)-respLen:]
 						}
 					}
 				}
@@ -296,6 +304,9 @@ func (u *Upgrader) enterUpgradeMode() error {
 	case <-successChan:
 		log.Println("成功进入升级模式")
 		return nil
+	case err := <-failChan:
+		log.Println("进入升级模式失败: ", err)
+		return err
 	case <-time.After(timeout):
 		log.Println("进入升级模式超时")
 		closeDone()

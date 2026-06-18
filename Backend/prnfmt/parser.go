@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -57,7 +55,7 @@ func findPrinterName(s string) string {
 	}
 	return ""
 }
-func ParserFmtToFile(utf8Buff string, printerModel string, fmtLen int) bool {
+func ParserFmtToBytes(utf8Buff string, printerModel string, fmtLen int) ([]byte, bool) {
 	var buffer *bytes.Buffer
 	printMode := printerModel
 	printerName := ""
@@ -81,17 +79,11 @@ func ParserFmtToFile(utf8Buff string, printerModel string, fmtLen int) bool {
 	} else {
 		buffer = ParserRptFmtToBuf(utf8Buff, printerName, fmtLen)
 	}
-	// 7.创建bin文件
 
-	if creatFile("formatBin.bin", buffer) {
-		fmt.Println("creat binary file success")
-		return true
-	} else {
-		fmt.Println("creat binary file fail")
-		return false
+	if buffer != nil && buffer.Len() > 0 {
+		return buffer.Bytes(), true
 	}
-
-	// 8.写数据到串口
+	return nil, false
 }
 
 func ParserFmtToBuf(utf8Buff string, printerModel string, fmtLen int) *bytes.Buffer {
@@ -316,23 +308,7 @@ func binaryData(tempInfo printInfo) *bytes.Buffer {
 	return buf
 }
 
-// 创建bin文件
-func creatFile(fileName string, tempBuf *bytes.Buffer) bool {
-	//先找到exe运行的路径
-	exePath, _ := os.Executable()
-	exeDir := filepath.Dir(exePath)
-	// 拼接文件路径
-	filePath := filepath.Join(exeDir, fileName)
 
-	fp, err := os.Create(filePath)
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-	defer fp.Close()
-	fp.Write(tempBuf.Bytes())
-	return true
-}
 
 // Utf8ToGb2312 将UTF-8字符串转换为GB2312编码
 func Utf8ToGb2312(buff string) (string, error) {
@@ -349,29 +325,20 @@ func Utf8ToGb2312(buff string) (string, error) {
 	return gb2312str, err
 }
 
-func ParserDefFmtToFile(fmtDataList []string, printerModel string, fmtLen int) bool {
+func ParserDefFmtToBytes(fmtDataList []string, printerModel string, fmtLen int) ([]byte, bool) {
 	var buffer *bytes.Buffer
 	if printerModel == "EPM205" {
 		buffer = ParserDefFmtToBuf(fmtDataList, printerModel, fmtLen)
 	} else if printerModel == "LP50" {
 		buffer = ParserLp50DefFmtToBuf(fmtDataList, printerModel, fmtLen)
 	} else {
-		return false
+		return nil, false
 	}
-	// 7.创建bin文件
-	if buffer.Len() > 0 {
-		if creatFile("formatBin.bin", buffer) {
-			fmt.Println("creat binary file success")
-			return true
-		} else {
-			fmt.Println("creat binary file fail")
-			return false
-		}
-
+	
+	if buffer != nil && buffer.Len() > 0 {
+		return buffer.Bytes(), true
 	}
-	return false
-
-	// 8.写数据到串口
+	return nil, false
 }
 
 func ParserDefFmtToBuf(fmtDataList []string, printerModel string, fmtLen int) *bytes.Buffer {

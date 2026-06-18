@@ -1054,7 +1054,7 @@ func (s *ScaleMgr) AddMediaList(scaleId int64, conn ScaleConnMedia) error {
 func (s *ScaleMgr) DelMediaList(scaleId int64, conn ScaleConnMedia) error {
 	result := []*ScaleConnMedia{}
 	for _, m := range s.medias {
-		if m.ScaleId != scaleId && m.MediaConf != conn.MediaConf {
+		if m.ScaleId != scaleId {
 			result = append(result, m)
 		}
 	}
@@ -1239,6 +1239,18 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		if err := json.UnmarshalFromString(req.MediaConf.MediaInfoJson, &reqComInfo); err != nil {
 			return err
 		}
+
+		for _, conn := range s.medias {
+			if conn.MediaConf.Type == MEDIA_COM {
+				var existingComInfo ComInfo
+				if err := json.UnmarshalFromString(conn.MediaConf.MediaInfoJson, &existingComInfo); err == nil {
+					if reqComInfo.DevPath == existingComInfo.DevPath {
+						return fmt.Errorf("this serial port already exists")
+					}
+				}
+			}
+		}
+
 		if len(s.medias) == 0 {
 			nextScaleId = 1
 		} else {

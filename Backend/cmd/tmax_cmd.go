@@ -320,6 +320,8 @@ func ComposeCmdTMAX(composer *m.CmdComposer, cmd m.CmdType, cmdData m.CmdData) (
 		return composeCmd(CMDID_GET_TARE_WEIGHT_TMAX, 0, []byte{}), CMD_TIMEOUT_SHORT_1500_MS, nil
 	case m.CMD_GET_PRE_TARE_WEIGHT:
 		return composeCmd(CMDID_GET_PRE_TARE_WEIGHT_TMAX, 0, []byte{}), CMD_TIMEOUT_SHORT_1500_MS, nil
+	case m.CMD_SET_PRE_TARE_S15:
+		return composeCmd(CMDID_PREF_TARE_ON_STABLE_TMAX, 0, []byte(cmdData.Data.(string))), CMD_TIMEOUT_SHORT_1500_MS, nil
 
 	}
 

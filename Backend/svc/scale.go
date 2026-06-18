@@ -143,6 +143,8 @@ type Scale struct {
 	// 用于 Modbus S15 标定
 	ModbusCalWeightMSB uint16
 	ModbusCalWeight    float32
+	// 用于 Modbus S15 预扣重
+	ModbusPreTareMSB uint16
 	// send to scale channel, message will be json string
 	toScaleMsgCh chan string
 	// receive from scale channel, message will be json string
@@ -2281,17 +2283,11 @@ func ReqDownPrnFmt(c *Scale, req SRequest) (*ScaleRespMsg, error) {
 			return &ScaleRespMsg{}, fmt.Errorf("format error,download fail! ")
 		}
 
-		if prnfmt.ParserFmtToFile(tempStr, reqData.PrinterModel, eraseLen) {
-			// 读取bin文件
-			exePath, _ := os.Executable()
-			exeDir := filepath.Dir(exePath)
-			// 拼接文件路径
-			filePath := filepath.Join(exeDir, "formatBin.bin")
-			data, err := os.ReadFile(filePath)
-			if err != nil {
-				l.Log.Errorf("ReqDownPrnFmt read file error: %v", err)
-				return &ScaleRespMsg{}, err
-			}
+		data, success := prnfmt.ParserFmtToBytes(tempStr, reqData.PrinterModel, eraseLen)
+		if !success {
+			return &ScaleRespMsg{}, fmt.Errorf("parse print format fail")
+		}
+
 			// 擦除原本秤上的打印格式
 			l.Log.Debug("erase flash on scale")
 			no, err := strconv.Atoi(fileOrderNo)
@@ -2352,8 +2348,8 @@ func ReqDownPrnFmt(c *Scale, req SRequest) (*ScaleRespMsg, error) {
 				addr += 0x100
 			}
 			l.Log.Info("send bin ok")
-		}
 	}
+
 	SaveDownLabelFmtToScaleLog(c.Conn.ScaleName, req.ReqData)
 	return &ScaleRespMsg{m.DOWN_PRN_FMT_RESP, "ok", c.Id}, nil
 }
@@ -2423,17 +2419,8 @@ func ReqDownDefaultPrnFmt(c *Scale, req SRequest) (*ScaleRespMsg, error) {
 	//分析打印格式
 	composer := c.composer
 	fn := composer.ComposeCmd
-	if prnfmt.ParserDefFmtToFile(strFileDataArray, reqData.PrinterModel, prnFmtMaxLenth) {
-		// 读取bin文件
-		exePath, _ := os.Executable()
-		exeDir := filepath.Dir(exePath)
-		// 拼接文件路径
-		filePath := filepath.Join(exeDir, "formatBin.bin")
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			l.Log.Errorf("ReqDownDefaultPrnFmt read file error: %v", err)
-			return &ScaleRespMsg{}, err
-		}
+	data, success := prnfmt.ParserDefFmtToBytes(strFileDataArray, reqData.PrinterModel, prnFmtMaxLenth)
+	if success {
 		// 擦除原本秤上的打印格式
 		l.Log.Debug("erase flash on scale")
 
@@ -4666,6 +4653,16 @@ func ReqCalWeight(c *Scale, req SRequest) (*ScaleRespMsg, error) {
 	}
 	return perfCmdNwaitResult(c, cmd, m.SET_CAL_WGT_RESP, timeoutMs)
 
+}
+
+// 设置S15预扣重
+func ReqSetPreTareS15(c *Scale, preTareStr string) (*ScaleRespMsg, error) {
+	composer := c.composer
+	cmd, timeoutMs, err := composer.ComposeCmd(composer, m.CMD_SET_PRE_TARE_S15, m.CmdData{Type: m.DATA_TYPE_STR, Data: preTareStr})
+	if err != nil {
+		return &ScaleRespMsg{m.SET_PRE_TARE_S15_RESP, fmt.Errorf("fail").Error(), c.Id}, nil
+	}
+	return perfCmdNwaitResult(c, cmd, m.SET_PRE_TARE_S15_RESP, timeoutMs)
 }
 
 // 标定时发送的心跳

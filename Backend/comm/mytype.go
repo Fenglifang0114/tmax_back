@@ -146,6 +146,7 @@ const (
 	CMD_GET_NET_WEIGHT
 	CMD_GET_TARE_WEIGHT
 	CMD_GET_PRE_TARE_WEIGHT
+	CMD_SET_PRE_TARE_S15
 )
 
 type DataType int
@@ -330,6 +331,7 @@ const (
 	GET_NET_WEIGHT_RESP        RespMsgType = "resp_get_net_weight"
 	GET_TARE_WEIGHT_RESP       RespMsgType = "resp_get_tare_weight"
 	GET_PRE_TARE_WEIGHT_RESP   RespMsgType = "resp_get_pre_tare_weight"
+	SET_PRE_TARE_S15_RESP      RespMsgType = "resp_set_pre_tare_s15"
 
 	CLOSE_SERVER_CMD_RESP          RespMsgType = "resp_close_server_cmd"
 	DIS_BT_CMD_RESP                RespMsgType = "resp_dis_bt_cmd"

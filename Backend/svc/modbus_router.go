@@ -19,11 +19,16 @@ func RouteModbusRequest(packet []byte, targetModbusId int, srvMgr *SrvMgr) []byt
 	
 	// 查找目标秤
 	var targetScale *Scale
-	scaleMgr := srvMgr.scaleMgr
-	for _, scale := range scaleMgr.scales {
-		if (scale.Conn != nil && scale.Conn.ModbusId == targetModbusId) || scale.Id == int64(targetModbusId) {
-			targetScale = scale
-			break
+	if srvMgr != nil && srvMgr.scaleMgr != nil {
+		scaleMgr := srvMgr.scaleMgr
+		for _, scale := range scaleMgr.scales {
+			if scale == nil {
+				continue
+			}
+			if (scale.Conn != nil && scale.Conn.ModbusId == targetModbusId) || scale.Id == int64(targetModbusId) {
+				targetScale = scale
+				break
+			}
 		}
 	}
 
@@ -72,13 +77,22 @@ func handleReadHoldingRegisters(slaveID byte, startAddr uint16, count uint16, sc
 			} else {
 				val = currentWeight
 			}
+			if addr == 2 || addr == 40003 {
+				val = float32(math.Floor(float64(val)))
+			}
 		case 4, 40005: // 皮重 (扣重)
 			if weight, err := GetTareWeight(scale); err == nil {
 				val = weight
 			}
+			if addr == 4 || addr == 40005 {
+				val = float32(math.Floor(float64(val)))
+			}
 		case 6, 40007: // 净重
 			if weight, err := GetNetWeight(scale); err == nil {
 				val = weight
+			}
+			if addr == 6 || addr == 40007 {
+				val = float32(math.Floor(float64(val)))
 			}
 		case 8, 40009: // 未圆整毛重 (暂用毛重代替)
 			if weight, err := GetGrossWeight(scale); err == nil {
@@ -144,13 +158,34 @@ func handleWriteSingleRegister(slaveID byte, startAddr uint16, value uint16, sca
 			success = true
 		case 25, 40026: // 0x19 or 0x9C5A
 			log.Log.Infof("Modbus Router: Executing Clear Tare on Scale %d", scale.Id)
-			// scale.PerfClearTare() // 暂无直接方法，通常调用取消扣重
+			if scale.Model == "S15" {
+				ReqSetForceUnTare(scale, SRequest{})
+			} else {
+				scale.PerfTare()
+			}
 			success = true
 		}
 	}
 
-	// 针对 S15 的标定功能
+	// 针对 S15 的预扣重
 	switch startAddr {
+	case 19, 40020: // 0x9C54 (MSB)
+		success = true
+		if scale.Model == "S15" {
+			scale.ModbusPreTareMSB = value
+			log.Log.Infof("Modbus Router: S15 Set Pre-Tare MSB to 0x%X", value)
+		}
+	case 20, 40021: // 0x9C55 (LSB)
+		success = true
+		if scale.Model == "S15" {
+			bits := (uint32(scale.ModbusPreTareMSB) << 16) | uint32(value)
+			preTareWeight := math.Float32frombits(bits)
+			log.Log.Infof("Modbus Router: S15 Set Pre-Tare to %f", preTareWeight)
+			preTareStr := strconv.FormatFloat(float64(preTareWeight), 'f', -1, 32)
+			ReqSetPreTareS15(scale, preTareStr)
+		}
+
+	// 针对 S15 的标定功能
 	case 30, 40030: // 0x9C5E
 		success = true // 无论是否 S15，都返回正确，以免主机报错
 		if scale.Model == "S15" {

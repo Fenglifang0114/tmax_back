@@ -31,15 +31,29 @@ func (c *Scale) ProcessUpdate(srecName string) (*ScaleRespMsg, error) {
 	}
 
 	// 读取 SREC 文件
-	srecData, err := SRECToByteArray(srecName)
+	srecData, minAddress, err := SRECToByteArray(srecName)
 	if err != nil {
 		port.Close()
 		return &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail,srec data error", ScaleId: c.Id}, err
 	}
+
+	var expectedBootResp []byte
+	var wrongBootResp []byte
+	if minAddress&0xFFFF == 0x0800 {
+		expectedBootResp = []byte{0x03, 0xff, 0x08}
+		wrongBootResp = []byte{0x00, 0xff, 0x08}
+	} else if minAddress&0xFFFF == 0x1000 {
+		expectedBootResp = []byte{0x00, 0xff, 0x08}
+		wrongBootResp = []byte{0x03, 0xff, 0x08}
+	} else {
+		port.Close()
+		return &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail,app address not match boot 2K/4K", ScaleId: c.Id}, fmt.Errorf("app address not match boot 2K/4K")
+	}
+
 	// 执行升级流程
 	upgrader := NewUpgrader(c, port)
 
-	_, err = upgrader.PerformUpgrader(srecData)
+	_, err = upgrader.PerformUpgrader(srecData, expectedBootResp, wrongBootResp)
 	if err != nil {
 		log.Printf("外部调用捕获到错误: %v", err) // 添加日志
 		respMsg := ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail,upgrade failed", ScaleId: c.Id}
@@ -100,12 +114,12 @@ func (c *Scale) TmaxUpdateFirmware(srecName string) (*ScaleRespMsg, error) {
 // 	return lines, scanner.Err()
 // }
 
-// SRECToByteArray 解析SREC文件并返回字节数组和错误
-func SRECToByteArray(filename string) ([]byte, error) {
+// SRECToByteArray 解析SREC文件并返回字节数组、最小地址和错误
+func SRECToByteArray(filename string) ([]byte, uint32, error) {
 	// 读取SREC文件
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, fmt.Errorf("打开文件失败: %v", err)
+		return nil, 0, fmt.Errorf("打开文件失败: %v", err)
 	}
 	defer file.Close()
 
@@ -119,7 +133,7 @@ func SRECToByteArray(filename string) ([]byte, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read file: %v", err)
+		return nil, 0, fmt.Errorf("failed to read file: %v", err)
 	}
 
 	// 确定地址范围
@@ -129,7 +143,7 @@ func SRECToByteArray(filename string) ([]byte, error) {
 	for _, record := range records {
 		srec, err := parseSRecord(record)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse SREC record: %v", err)
+			return nil, 0, fmt.Errorf("failed to parse SREC record: %v", err)
 		}
 
 		// 只处理数据记录类型 (S1, S2, S3)
@@ -152,13 +166,13 @@ func SRECToByteArray(filename string) ([]byte, error) {
 	}
 
 	if !firstAddressSet {
-		return nil, fmt.Errorf("fail,no valid data records found")
+		return nil, 0, fmt.Errorf("fail,no valid data records found")
 	}
 
 	// 创建二进制数据缓冲区并初始化为0xFF
 	dataSize := maxAddress - minAddress
 	if dataSize > 1024*1024 {
-		return nil, fmt.Errorf("fail,binary data size exceeds 1024KB: %d bytes", dataSize)
+		return nil, 0, fmt.Errorf("fail,binary data size exceeds 1024KB: %d bytes", dataSize)
 	}
 
 	binaryData := make([]byte, dataSize)
@@ -170,19 +184,19 @@ func SRECToByteArray(filename string) ([]byte, error) {
 	for _, record := range records {
 		srec, err := parseSRecord(record)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse SREC record: %v", err)
+			return nil, 0, fmt.Errorf("failed to parse SREC record: %v", err)
 		}
 
 		if srec.Type == "S1" || srec.Type == "S2" || srec.Type == "S3" {
 			offset := srec.Address - minAddress
 			if offset+uint32(len(srec.Data)) > uint32(len(binaryData)) {
-				return nil, fmt.Errorf("fail,record data exceeds calculated address range: %s", record)
+				return nil, 0, fmt.Errorf("fail,record data exceeds calculated address range: %s", record)
 			}
 			copy(binaryData[offset:], srec.Data)
 		}
 	}
 
-	return binaryData, nil
+	return binaryData, minAddress, nil
 }
 
 // 解析单个SREC记录
