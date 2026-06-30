@@ -312,7 +312,7 @@ func retrieveWeight(data []byte) (WeightMsg, error) {
 
 		weightVal := strings.TrimRight(dataStr, "\r\n")
 		weightVal = strings.TrimSpace(weightVal)
-		if weightVal == "--OL--" || weightVal == "--UL--" {
+		if weightVal == "--OL--" || weightVal == "--UL--" || weightVal == "NoData" {
 			return WeightMsg{WeightVal: weightVal, WeightUnit: ""}, nil
 		}
 

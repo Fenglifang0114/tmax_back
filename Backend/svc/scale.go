@@ -2288,66 +2288,66 @@ func ReqDownPrnFmt(c *Scale, req SRequest) (*ScaleRespMsg, error) {
 			return &ScaleRespMsg{}, fmt.Errorf("parse print format fail")
 		}
 
-			// 擦除原本秤上的打印格式
-			l.Log.Debug("erase flash on scale")
-			no, err := strconv.Atoi(fileOrderNo)
+		// 擦除原本秤上的打印格式
+		l.Log.Debug("erase flash on scale")
+		no, err := strconv.Atoi(fileOrderNo)
+		if err != nil {
+			return &ScaleRespMsg{}, err
+		}
+		addr := eraseLen*(no-1) + prnFmtAddr
+		size := eraseLen
+		if addr > prnFmtAddr+prnFmtMaxLenth {
+			return &ScaleRespMsg{}, err
+		}
+
+		loopCnt := size / eraseLen
+		addrInLoop := addr
+		for i := 0; i < loopCnt; i++ {
+			cmd, timeoutMs, err := composer.ComposeCmd(composer, m.CMD_ERASE_FLASH, m.CmdData{Type: m.DATA_TYPE_INT, Data: addrInLoop})
 			if err != nil {
 				return &ScaleRespMsg{}, err
 			}
-			addr := eraseLen*(no-1) + prnFmtAddr
-			size := eraseLen
-			if addr > prnFmtAddr+prnFmtMaxLenth {
+			if res, err := perfCmdNwaitResult(c, cmd, m.ERASE_FLASH_RESP, timeoutMs); err != nil {
+				return &ScaleRespMsg{}, err
+			} else if res.MsgBody != "ok" {
+				return &ScaleRespMsg{}, fmt.Errorf("erase fail")
+			}
+			addrInLoop += eraseLen
+		}
+		// 计算数据包数量
+		packetCount := len(data) / DATA_LENGTH_256_TMAX
+		if len(data)%DATA_LENGTH_256_TMAX != 0 {
+			packetCount += 1
+		}
+		// 遍历所有数据包
+		l.Log.Debug("send data package to scale")
+		for i := 0; i < packetCount; i++ {
+			// 计算本包数据
+			start := i * DATA_LENGTH_256_TMAX
+			end := start + DATA_LENGTH_256_TMAX
+			if end > len(data) {
+				end = len(data)
+			}
+			packetData := data[start:end]
+
+			// 构建数据包
+			// dataPackCmd := buildSendDataPacket(addr, packetData)
+			packDataHexStr := hex.EncodeToString(packetData)
+			cmd, timeoutMs, err := fn(composer, m.CMD_WRITE_FLASH_256, m.CmdData{Type: m.DATA_TYPE_STR, Data: fmt.Sprintf("%08x:%s", addr, packDataHexStr)})
+
+			if err != nil {
 				return &ScaleRespMsg{}, err
 			}
-
-			loopCnt := size / eraseLen
-			addrInLoop := addr
-			for i := 0; i < loopCnt; i++ {
-				cmd, timeoutMs, err := composer.ComposeCmd(composer, m.CMD_ERASE_FLASH, m.CmdData{Type: m.DATA_TYPE_INT, Data: addrInLoop})
-				if err != nil {
-					return &ScaleRespMsg{}, err
-				}
-				if res, err := perfCmdNwaitResult(c, cmd, m.ERASE_FLASH_RESP, timeoutMs); err != nil {
-					return &ScaleRespMsg{}, err
-				} else if res.MsgBody != "ok" {
-					return &ScaleRespMsg{}, fmt.Errorf("erase fail")
-				}
-				addrInLoop += eraseLen
+			// 发送数据包
+			if res, err := perfCmdNwaitResult(c, cmd, m.WRITE_DATA_FLASH_RESP, timeoutMs); err != nil {
+				return &ScaleRespMsg{}, err
+			} else if res.MsgBody != "ok" {
+				return &ScaleRespMsg{}, fmt.Errorf("enable factory mode fail")
 			}
-			// 计算数据包数量
-			packetCount := len(data) / DATA_LENGTH_256_TMAX
-			if len(data)%DATA_LENGTH_256_TMAX != 0 {
-				packetCount += 1
-			}
-			// 遍历所有数据包
-			l.Log.Debug("send data package to scale")
-			for i := 0; i < packetCount; i++ {
-				// 计算本包数据
-				start := i * DATA_LENGTH_256_TMAX
-				end := start + DATA_LENGTH_256_TMAX
-				if end > len(data) {
-					end = len(data)
-				}
-				packetData := data[start:end]
-
-				// 构建数据包
-				// dataPackCmd := buildSendDataPacket(addr, packetData)
-				packDataHexStr := hex.EncodeToString(packetData)
-				cmd, timeoutMs, err := fn(composer, m.CMD_WRITE_FLASH_256, m.CmdData{Type: m.DATA_TYPE_STR, Data: fmt.Sprintf("%08x:%s", addr, packDataHexStr)})
-
-				if err != nil {
-					return &ScaleRespMsg{}, err
-				}
-				// 发送数据包
-				if res, err := perfCmdNwaitResult(c, cmd, m.WRITE_DATA_FLASH_RESP, timeoutMs); err != nil {
-					return &ScaleRespMsg{}, err
-				} else if res.MsgBody != "ok" {
-					return &ScaleRespMsg{}, fmt.Errorf("enable factory mode fail")
-				}
-				// 地址自增
-				addr += 0x100
-			}
-			l.Log.Info("send bin ok")
+			// 地址自增
+			addr += 0x100
+		}
+		l.Log.Info("send bin ok")
 	}
 
 	SaveDownLabelFmtToScaleLog(c.Conn.ScaleName, req.ReqData)
