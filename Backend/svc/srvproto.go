@@ -176,6 +176,8 @@ const (
 	REQ_OPEN_OUTPUT_PORT ReqType = "open_output_port" // with parameter of PortInfo	//写modbus线圈
 	REQ_READ_OUTPUT_PORT ReqType = "read_output_port" // with parameter of PortInfo	//读modbus线圈
 
+	REQ_GET_AUTO_SCAN    ReqType = "get_auto_scan"    //获取自动扫描串口配置
+	REQ_SET_AUTO_SCAN    ReqType = "set_auto_scan"    //设置自动扫描串口配置
 )
 
 type ReqAddScale struct {
@@ -989,6 +991,8 @@ const (
 	SCALE_MGR_RESP_GET_ALL_SEAL_LOG     ScaleMgrRespMsgType = "resp_get_all_seal_log"     //获取所有铅封日志记录
 	SCALE_MGR_RESP_UNSEAL_BY_MASTER_KEY ScaleMgrRespMsgType = "resp_unseal_by_master_key" //使用主密钥解封
 
+	SCALE_MGR_RESP_GET_AUTO_SCAN ScaleMgrRespMsgType = "resp_get_auto_scan" // auto scan setting
+	SCALE_MGR_RESP_SET_AUTO_SCAN ScaleMgrRespMsgType = "resp_set_auto_scan" // auto scan setting result
 )
 
 type PortsListMsg struct {

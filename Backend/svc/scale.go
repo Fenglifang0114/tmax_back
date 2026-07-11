@@ -2288,6 +2288,8 @@ func ReqDownPrnFmt(c *Scale, req SRequest) (*ScaleRespMsg, error) {
 			return &ScaleRespMsg{}, fmt.Errorf("parse print format fail")
 		}
 
+		// os.WriteFile("formatbin.bin", data, 0644)
+
 		// 擦除原本秤上的打印格式
 		l.Log.Debug("erase flash on scale")
 		no, err := strconv.Atoi(fileOrderNo)

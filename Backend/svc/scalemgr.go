@@ -856,7 +856,7 @@ func (p delScaleNotifier) Handle(mgr *SrvMgr, payload ReqDelScale) { //修改秤
 	}
 
 	scale, ok := mSrvMgr.scaleMgr.scales[payload.ScaleId]
-	if !ok {
+	if !ok || scale == nil || scale.Conn == nil {
 		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_SCALE_DEL, MsgBody: "fail,scale not found"}
 		return
 	}
@@ -881,9 +881,15 @@ func (p modifyScaleNotifier) Handle(payload ReqModifyScale) { //修改秤的属�
 	// Do something for this event
 	log.Log.Debug("Handle modifyScaleNotifier called")
 
-	oldMedia := mSrvMgr.scaleMgr.scales[payload.ScaleId].Conn.MediaConf
+	scale, ok := mSrvMgr.scaleMgr.scales[payload.ScaleId]
+	if !ok || scale == nil || scale.Conn == nil {
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_SCALE_MODIFY, MsgBody: "fail,scale not found"}
+		return
+	}
+
+	oldMedia := scale.Conn.MediaConf
 	newMedia := payload.MediaConf
-	scaleName := mSrvMgr.scaleMgr.scales[payload.ScaleId].Conn.ScaleName
+	scaleName := scale.Conn.ScaleName
 
 	if err := mSrvMgr.scaleMgr.UpdateScale(payload); err != nil {
 		log.Log.Errorf("%v\n", err)
@@ -903,7 +909,13 @@ func (p modifyScaleNameNotifier) Handle(payload ReqModifyScaleName) { //修改�
 	// Do something for this event
 	log.Log.Debug("Handle modifyScaleNameNotifier called")
 
-	oldName := mSrvMgr.scaleMgr.scales[payload.ScaleId].Conn.ScaleName
+	scale, ok := mSrvMgr.scaleMgr.scales[payload.ScaleId]
+	if !ok || scale == nil || scale.Conn == nil {
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_SCALE_MODIFY, MsgBody: "fail,scale not found"}
+		return
+	}
+
+	oldName := scale.Conn.ScaleName
 
 	if err := mSrvMgr.scaleMgr.UpdateScaleName(payload); err != nil {
 		log.Log.Errorf("%v\n", err)
@@ -965,6 +977,8 @@ func (s *ScaleMgr) Run() {
 
 		}
 	}
+
+	StartAutoMountTask(s)
 
 	for {
 
@@ -1272,7 +1286,16 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		var conf MediaConf = MediaConf{}
 		conf.Type = MEDIA_COM
 		conf.MediaInfoJson, _ = json.MarshalToString(comInfo)
-		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: "T-Max", ScaleSn: getSn(), TMedia: MEDIA_COM, MediaConf: conf, IsDefault: true, ScaleName: scaleName, ModbusId: req.ModbusId}
+		
+		mModel := req.ScaleModel
+		if mModel == "" {
+			mModel = "T-Max"
+		}
+		mSn := req.ScaleSn
+		if mSn == "" {
+			mSn = getSn()
+		}
+		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: mModel, ScaleSn: mSn, TMedia: MEDIA_COM, MediaConf: conf, IsDefault: true, ScaleName: scaleName, ModbusId: req.ModbusId}
 		s.connPb.connPb.InsertScaleConn(*scaleConn)
 		s.AddMediaList(scaleConn.ScaleId, *scaleConn)
 
@@ -1330,7 +1353,12 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		var conf MediaConf = MediaConf{}
 		conf.Type = MEDIA_BT
 		conf.MediaInfoJson, _ = json.MarshalToString(btInfo)
-		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: "T-Max", ScaleSn: getSn(), TMedia: MEDIA_BT, MediaConf: conf, IsDefault: true, ScaleName: scaleName, ModbusId: req.ModbusId}
+		
+		mModel := req.ScaleModel
+		if mModel == "" {
+			mModel = "T-Max"
+		}
+		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: mModel, ScaleSn: getSn(), TMedia: MEDIA_BT, MediaConf: conf, IsDefault: true, ScaleName: scaleName, ModbusId: req.ModbusId}
 		s.connPb.connPb.InsertScaleConn(*scaleConn)
 		s.AddMediaList(scaleConn.ScaleId, *scaleConn)
 
@@ -1441,7 +1469,7 @@ func (s *ScaleMgr) DelScale(id int64) error {
 		s.srvMgr.removeScale <- scale
 		s.connPb.connPb.DeleteScaleConn(*conn)
 		if s.scales[scale.Id] != nil { // scale not existing
-			s.scales[scale.Id] = nil
+			delete(s.scales, scale.Id)
 		}
 		s.DelMediaList(scale.Id, *conn)
 		//删除连接关系
@@ -1466,7 +1494,7 @@ func (s *ScaleMgr) DelScale(id int64) error {
 		s.srvMgr.removeScale <- scale
 		s.connPb.connPb.DeleteScaleConn(*conn)
 		if s.scales[scale.Id] != nil { // scale not existing
-			s.scales[scale.Id] = nil
+			delete(s.scales, scale.Id)
 		}
 		s.DelMediaList(scale.Id, *conn)
 		s.connPb.DeleteSrvScaleRelByScaleId(scale.Id)
@@ -1493,7 +1521,7 @@ func (s *ScaleMgr) DelScale(id int64) error {
 		s.srvMgr.removeScale <- scale
 		s.connPb.connPb.DeleteScaleConn(*conn)
 		if s.scales[scale.Id] != nil {
-			s.scales[scale.Id] = nil
+			delete(s.scales, scale.Id)
 		}
 		s.DelMediaList(scale.Id, *conn)
 		s.connPb.DeleteSrvScaleRelByScaleId(scale.Id)

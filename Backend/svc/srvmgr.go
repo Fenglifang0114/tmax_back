@@ -1316,7 +1316,20 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 		} else {
 			readOutputPort.Trigger(scaleMgr.srvMgr, data)
 		}
-
+	case REQ_GET_AUTO_SCAN:
+		val := "false"
+		if EnableAutoScan {
+			val = "true"
+		}
+		scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_GET_AUTO_SCAN, MsgBody: val}
+	case REQ_SET_AUTO_SCAN:
+		reqJsonStr := req.ReqData
+		if reqJsonStr == "true" || reqJsonStr == "true\n" || reqJsonStr == "\"true\"" {
+			SaveAutoScanConfig(true)
+		} else {
+			SaveAutoScanConfig(false)
+		}
+		scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_SET_AUTO_SCAN, MsgBody: "ok"}
 	}
 
 }
