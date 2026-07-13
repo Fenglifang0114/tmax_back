@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"tmaxsrv/comm"
@@ -32,6 +33,8 @@ type TNet struct {
 	isAlive    bool
 	isDefault  bool //用来判断同一台秤，多种连接方式的情况下，是否走这个通道
 	timeOutCnt int  // 超时次数
+	IsModbusTCP   bool
+	transactionID uint32
 }
 
 // NewSerial creates a new serial port
@@ -241,7 +244,52 @@ func (tnet *TNet) read() {
 			if tnet.queue.GetDataLen() > MIN_PACK_SIZE {
 				// call the packet picker function
 				data := tnet.queue.PeekAll()
-				_, packLen, removeLen, pack := tnet.pickerFn(data, tnet.queue.GetDataLen())
+				var packLen, removeLen uint
+				var pack comm.Packet
+
+				if tnet.IsModbusTCP {
+					// Read MBAP: Transaction ID(2), Protocol ID(2), Length(2)
+					if len(data) >= 7 { // MBAP(6) + at least 1 byte Unit ID
+						mbapLen := int(data[4])<<8 | int(data[5])
+						totalLen := 6 + mbapLen
+						
+						// Check if Protocol ID is 0x0000 (Modbus)
+						if data[2] != 0 || data[3] != 0 {
+							// Invalid MBAP, discard 1 byte and re-sync
+							packLen = 0
+							removeLen = 1
+						} else if len(data) >= totalLen {
+							// We have a full Modbus TCP frame
+							payload := data[6:totalLen]
+							
+							// Reconstruct RTU by appending CRC
+							rtuFrame := make([]byte, len(payload)+2)
+							copy(rtuFrame, payload)
+							crc := calculateModbusCRC16(payload)
+							rtuFrame[len(payload)] = byte(crc & 0xFF)
+							rtuFrame[len(payload)+1] = byte((crc >> 8) & 0xFF)
+							
+							_, packLenRtu, _, packParsed := tnet.pickerFn(rtuFrame, len(rtuFrame))
+							if packLenRtu > 0 {
+								packLen = uint(packLenRtu)
+								removeLen = uint(totalLen) // Remove the whole TCP frame
+								pack = packParsed
+							} else {
+								// Picker failed to parse? Shouldn't happen with valid RTU.
+								removeLen = uint(totalLen)
+							}
+						} else {
+							packLen = 0
+							removeLen = 0
+						}
+					} else {
+						packLen = 0
+						removeLen = 0
+					}
+				} else {
+					_, packLen, removeLen, pack = tnet.pickerFn(data, tnet.queue.GetDataLen())
+				}
+
 				if packLen > 0 {
 					if len(tnet.recvCh) >= RECV_CH_SIZE {
 						log.Log.Errorf("recvCh full, size: %v", len(tnet.recvCh))
@@ -384,7 +432,25 @@ func (tnet *TNet) write() {
 			log.Log.Error(fmt.Sprintf("Set write deadline error: %v", err))
 		}
 
-		n, err := tnet.conn.Write([]byte(message))
+		sendData := []byte(message)
+		if tnet.IsModbusTCP && len(sendData) >= 4 {
+			// Strips 2 bytes CRC
+			payload := sendData[:len(sendData)-2]
+			payloadLen := len(payload)
+			
+			tid := atomic.AddUint32(&tnet.transactionID, 1)
+			header := make([]byte, 6)
+			header[0] = byte((tid >> 8) & 0xFF)
+			header[1] = byte(tid & 0xFF)
+			header[2] = 0x00
+			header[3] = 0x00
+			header[4] = byte((payloadLen >> 8) & 0xFF)
+			header[5] = byte(payloadLen & 0xFF)
+			
+			sendData = append(header, payload...)
+		}
+
+		n, err := tnet.conn.Write(sendData)
 		if err != nil {
 			// [最终稳定优化] 写入报错时的分级处理
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -398,7 +464,7 @@ func (tnet *TNet) write() {
 
 			// 只有真正的致命链路错误才断线
 			log.Log.Errorf("Fatal write error: %v, IP: %v, message length: %v, sent: %v",
-				err.Error(), tnet.ip, len(message), n)
+				err.Error(), tnet.ip, len(sendData), n)
 
 			tnet.isAlive = false
 			if tnet.conn != nil {
@@ -411,8 +477,8 @@ func (tnet *TNet) write() {
 			continue
 		}
 
-		if n != len(message) {
-			log.Log.Warn(fmt.Sprintf("Partial write: %v of %v bytes", n, len(message)))
+		if n != len(sendData) {
+			log.Log.Warn(fmt.Sprintf("Partial write: %v of %v bytes", n, len(sendData)))
 		}
 
 		time.Sleep(10 * time.Millisecond)

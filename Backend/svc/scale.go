@@ -220,6 +220,9 @@ func NewScale(scaleMgr *ScaleMgr, conn *ScaleConnMedia, scaleCat m.ScaleCat, mod
 
 		picker := picker.GetPickerFn(scaleCat)
 		net, _ = NewNet(ncnf, picker, conn.IsDefault)
+		if net != nil && (conn.ProtocolName == "Modbus TCP" || conn.ProtocolName == "ModbusTCP" || conn.ProtocolName == "TCP") {
+			net.IsModbusTCP = true
+		}
 		scale = &Scale{
 			scaleMgr: scaleMgr, Conn: conn, ScaleCat: scaleCat, Model: model, Sn: sn, toScaleMsgCh: make(chan string, SCALE_SEND_CH_SIZE),
 			fromScaleMsgCh: make(chan string, SCALE_RECV_CH_SIZE), MyNet: net, Ncnf: ncnf,
@@ -749,6 +752,8 @@ func (s *Scale) ModifyMedia(conf MediaConf) bool {
 		}
 		if s.MyNet, err = NewNet(ncnf, pickFun, true); err != nil {
 			l.Log.Error(err.Error())
+		} else if s.MyNet != nil && (s.Conn.ProtocolName == "Modbus TCP" || s.Conn.ProtocolName == "ModbusTCP" || s.Conn.ProtocolName == "TCP") {
+			s.MyNet.IsModbusTCP = true
 		}
 		time.Sleep(500 * time.Millisecond)
 		s.Ncnf = ncnf

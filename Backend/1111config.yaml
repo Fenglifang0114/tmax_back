@@ -1,0 +1,28 @@
+# 串口配置
+serial:
+  name: COM3                    # 串口号 (Windows: COM3, Linux: /dev/ttyUSB0, /dev/ttyS0)
+  baudrate: 57600                # 波特率 (常用: 9600, 115200, 19200, 38400, 57600)
+  data_bits: 8                  # 数据位 (常用: 8, 7)
+  stop_bits: 1                  # 停止位 (1, 2)
+  parity: "N"                   # 校验位: "N"(无), "E"(偶校验), "O"(奇校验)
+  read_timeout: 100ms           # 读取超时时间
+
+# 组包配置
+packet:
+  mode: "line"           # 组包模式: "header_tail"(包头包尾), "line"(行模式), "none"(无)
+  header: "5AA5"                # 包头 (十六进制字符串)
+  tail: "A55A"                  # 包尾 (十六进制字符串)
+  line_ending: "CRLF"             # 行结束符: "CR"(回车), "LF"(换行), "CRLF"(回车换行)
+  max_packet_len: 1024          # 最大包长度 (字节)
+
+# 自动打开串口
+auto_open_serial: true          # 是否在程序启动时自动打开串口
+
+# 串口数据处理器配置
+serial_handlers:
+  - name: "logger"              # 日志处理器
+    enabled: true               # 是否启用
+  - name: "modbus"              # Modbus处理器
+    enabled: true               # 是否启用
+  - name: "custom_handler"      # 自定义处理器
+    enabled: false              # 是否启用
