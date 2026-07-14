@@ -277,46 +277,49 @@ func tryPortAtBaud(s *ScaleMgr, port string, baud int) (bool, string, string, st
 		l.Log.Errorf("auto_mount: TMax compose error: %v", err)
 	}
 
-	// Try DC500 continuous data
-	l.Log.Infof("auto_mount: trying DC500 continuous data on %s at %d", port, baud)
-	start := time.Now()
-	dataStr := ""
-	buf := make([]byte, 256)
+	/*
+		// 屏蔽DC500，因为无法获取机种名和序列号，与多机种多协议冲突 (2026-07-14)
+		// Try DC500 continuous data
+		l.Log.Infof("auto_mount: trying DC500 continuous data on %s at %d", port, baud)
+		start := time.Now()
+		dataStr := ""
+		buf := make([]byte, 256)
 
-	// Read for 1.5 seconds max
-	for time.Since(start) < 1500*time.Millisecond {
-		if !EnableAutoScan {
-			return false, "", "", ""
-		}
-		n, _ := p.Read(buf)
-		if n > 0 {
-			chunk := string(buf[:n])
-			dataStr += chunk
-			l.Log.Infof("auto_mount: [DEBUG] DC500 chunk received: %q", chunk)
+		// Read for 1.5 seconds max
+		for time.Since(start) < 1500*time.Millisecond {
+			if !EnableAutoScan {
+				return false, "", "", ""
+			}
+			n, _ := p.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				dataStr += chunk
+				l.Log.Infof("auto_mount: [DEBUG] DC500 chunk received: %q", chunk)
 
-			// Check if we have complete lines
-			lines := strings.Split(dataStr, "\n")
-			for i := 0; i < len(lines)-1; i++ {
-				line := strings.TrimSpace(lines[i])
-				l.Log.Infof("auto_mount: [DEBUG] DC500 parsed line: %q", line)
+				// Check if we have complete lines
+				lines := strings.Split(dataStr, "\n")
+				for i := 0; i < len(lines)-1; i++ {
+					line := strings.TrimSpace(lines[i])
+					l.Log.Infof("auto_mount: [DEBUG] DC500 parsed line: %q", line)
 
-				if strings.Contains(line, "ST") || strings.Contains(line, "UL") || strings.Contains(line, "OL") || strings.Contains(line, "ZE") {
-					_, err := retrieveWeight([]byte(line))
-					if err == nil {
-						l.Log.Infof("auto_mount: DC500 valid data found on %s", port)
-						return true, "DC500", "DC500", ""
-					} else {
-						l.Log.Errorf("auto_mount: [DEBUG] retrieveWeight failed for %q: %v", line, err)
+					if strings.Contains(line, "ST") || strings.Contains(line, "UL") || strings.Contains(line, "OL") || strings.Contains(line, "ZE") {
+						_, err := retrieveWeight([]byte(line))
+						if err == nil {
+							l.Log.Infof("auto_mount: DC500 valid data found on %s", port)
+							return true, "DC500", "DC500", ""
+						} else {
+							l.Log.Errorf("auto_mount: [DEBUG] retrieveWeight failed for %q: %v", line, err)
+						}
 					}
 				}
-			}
 
-			// Keep only the last incomplete line
-			if len(lines) > 0 {
-				dataStr = lines[len(lines)-1]
+				// Keep only the last incomplete line
+				if len(lines) > 0 {
+					dataStr = lines[len(lines)-1]
+				}
 			}
 		}
-	}
+	*/
 
 	return false, "", "", ""
 }
