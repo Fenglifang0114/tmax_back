@@ -37,6 +37,26 @@ var protocolParsers = map[string]ProtocolParser{
 
 // DispatchProtocolParser 根据协议名调度相应的解析函数
 func DispatchProtocolParser(protocolName string, scaleId int64, data []byte) (*ScaleRespMsg, error) {
+	dataStr := string(data)
+	if strings.Contains(dataStr, "UL") || strings.Contains(dataStr, "OL") {
+		val := "-OL-"
+		if strings.Contains(dataStr, "UL") {
+			val = "-UL-"
+		}
+		msg := WeightMsg{
+			IsStable:   false,
+			IsNet:      false,
+			IsZero:     false,
+			WeightVal:  val,
+			WeightUnit: "",
+		}
+		return &ScaleRespMsg{
+			MsgType: m.WEIGHT_DATA,
+			MsgBody: msg,
+			ScaleId: scaleId,
+		}, nil
+	}
+
 	// 如果在注册表里能找到该协议，就用特定的协议解析
 	if parser, exists := protocolParsers[protocolName]; exists {
 		return parser(scaleId, data)
