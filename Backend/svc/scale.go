@@ -463,7 +463,11 @@ func (s *Scale) procScaleRespMsg() {
 
 					s.Conn.IsOnline = true
 
-					msg, err := retreiveRespMsgC51(s.Id, inPack.Payload)
+					protocolName := ""
+					if s.Conn != nil {
+						protocolName = s.Conn.ProtocolName
+					}
+					msg, err := DispatchProtocolParser(protocolName, s.Id, inPack.Payload)
 					if err != nil {
 						continue
 					}
@@ -475,16 +479,6 @@ func (s *Scale) procScaleRespMsg() {
 					}
 					sendMsgIntoChsOrWeightToClient(s, msg)
 				} else if s.ScaleCat == m.SCALE_TMAX || s.ScaleCat == m.SCALE_TMAX_PASSTH {
-					// Route non-SCP-X protocols to DispatchProtocolParser
-					if s.Conn != nil && s.Conn.ProtocolName != "" && s.Conn.ProtocolName != "SCP-X" {
-						s.Conn.IsOnline = true
-						msg, err := DispatchProtocolParser(s.Conn.ProtocolName, s.Id, inPack.Payload)
-						if err != nil {
-							continue
-						}
-						sendMsgIntoChsOrWeightToClient(s, msg)
-						continue
-					}
 					// find message buffer that associate to the message
 
 					if s.isScalePassth {
@@ -536,6 +530,18 @@ func (s *Scale) procScaleRespMsg() {
 				// l.Log.Debugf("From net: %v", inPack)
 
 				if s.ScaleCat == m.SCALE_C51 {
+
+					s.Conn.IsOnline = true
+
+					protocolName := ""
+					if s.Conn != nil {
+						protocolName = s.Conn.ProtocolName
+					}
+					msg, err := DispatchProtocolParser(protocolName, s.Id, inPack.Payload)
+					if err != nil {
+						continue
+					}
+					sendMsgIntoChsOrWeightToClient(s, msg)
 				} else if s.ScaleCat == m.SCALE_T2200 {
 					msg, err := retreiveRespMsgT2200(s.Id, inPack.Payload)
 					if err != nil {
@@ -543,16 +549,6 @@ func (s *Scale) procScaleRespMsg() {
 					}
 					sendMsgIntoChsOrWeightToClient(s, msg)
 				} else if s.ScaleCat == m.SCALE_TMAX || s.ScaleCat == m.SCALE_TMAX_PASSTH {
-					// Route non-SCP-X protocols to DispatchProtocolParser
-					if s.Conn != nil && s.Conn.ProtocolName != "" && s.Conn.ProtocolName != "SCP-X" {
-						s.Conn.IsOnline = true
-						msg, err := DispatchProtocolParser(s.Conn.ProtocolName, s.Id, inPack.Payload)
-						if err != nil {
-							continue
-						}
-						sendMsgIntoChsOrWeightToClient(s, msg)
-						continue
-					}
 					// find message buffer that associate to the message
 
 					if s.isScalePassth {
@@ -603,6 +599,18 @@ func (s *Scale) procScaleRespMsg() {
 				// l.Log.Debugf("From net: %v", inPack)
 
 				if s.ScaleCat == m.SCALE_C51 {
+
+					s.Conn.IsOnline = true
+
+					protocolName := ""
+					if s.Conn != nil {
+						protocolName = s.Conn.ProtocolName
+					}
+					msg, err := DispatchProtocolParser(protocolName, s.Id, inPack.Payload)
+					if err != nil {
+						continue
+					}
+					sendMsgIntoChsOrWeightToClient(s, msg)
 				} else if s.ScaleCat == m.SCALE_T2200 {
 					msg, err := retreiveRespMsgT2200(s.Id, inPack.Payload)
 					if err != nil {
@@ -610,16 +618,6 @@ func (s *Scale) procScaleRespMsg() {
 					}
 					sendMsgIntoChsOrWeightToClient(s, msg)
 				} else if s.ScaleCat == m.SCALE_TMAX || s.ScaleCat == m.SCALE_TMAX_PASSTH {
-					// Route non-SCP-X protocols to DispatchProtocolParser
-					if s.Conn != nil && s.Conn.ProtocolName != "" && s.Conn.ProtocolName != "SCP-X" {
-						s.Conn.IsOnline = true
-						msg, err := DispatchProtocolParser(s.Conn.ProtocolName, s.Id, inPack.Payload)
-						if err != nil {
-							continue
-						}
-						sendMsgIntoChsOrWeightToClient(s, msg)
-						continue
-					}
 					// find message buffer that associate to the message
 
 					if s.isScalePassth {

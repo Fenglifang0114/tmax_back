@@ -1278,6 +1278,9 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 			nextScaleId = maxScaleID + 1
 		}
 		scaleCat := comm.SCALE_TMAX
+		if req.ProtocolName != "SCP-X" {
+			scaleCat = comm.SCALE_C51
+		}
 		scaleName := "Scale" + strconv.FormatInt(nextScaleId, 10)
 		var comInfo ComInfo = ComInfo{DevPath: reqComInfo.DevPath, Baud: reqComInfo.Baud, DataBits: 8, Parity: 0, StopBits: 0}
 		var conf MediaConf = MediaConf{}
@@ -1364,6 +1367,9 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 			nextScaleId = maxScaleID + 1
 		}
 		scaleCat := comm.SCALE_TMAX
+		if req.ProtocolName != "SCP-X" {
+			scaleCat = comm.SCALE_C51
+		}
 		scaleName := "Scale" + strconv.FormatInt(nextScaleId, 10)
 
 		var btInfo BtInfo = BtInfo{Mac: reqBtInfo.Mac, Name: reqBtInfo.Name}
@@ -1472,6 +1478,11 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		modbusId = 0
 	}
 
+	scaleCat := comm.SCALE_TMAX
+	if req.ProtocolName != "SCP-X" {
+		scaleCat = comm.SCALE_C51
+	}
+
 	conn := &ScaleConnMedia{
 		ScaleModel:   customModel,
 		CustomModel:  customModel,
@@ -1483,7 +1494,7 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		ScaleId:      nextScaleId,
 		IsDefault:    true,
 		IsOnline:     true,
-		ScaleCat:     comm.SCALE_TMAX,
+		ScaleCat:     scaleCat,
 		ScaleName:    "Scale" + strconv.FormatInt(nextScaleId, 10),
 		ModbusId:     modbusId,
 	}
@@ -1631,6 +1642,9 @@ func (s *ScaleMgr) UpdateScale(req ReqModifyScale) error {
 		conn.InnerModel = customModel
 	}
 	conn.ScaleCat = comm.SCALE_TMAX
+	if req.ProtocolName != "SCP-X" {
+		conn.ScaleCat = comm.SCALE_C51
+	}
 	
 	scale.Model = conn.ScaleModel
 	scale.ScaleCat = conn.ScaleCat
