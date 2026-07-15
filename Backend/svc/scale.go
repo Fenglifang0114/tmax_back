@@ -467,6 +467,7 @@ func (s *Scale) procScaleRespMsg() {
 					if s.Conn != nil {
 						protocolName = s.Conn.ProtocolName
 					}
+					l.Log.Debugf("DispatchProtocolParser - ProtocolName is: '%s' for scale Id: %d", protocolName, s.Id)
 					msg, err := DispatchProtocolParser(protocolName, s.Id, inPack.Payload)
 					if err != nil {
 						continue

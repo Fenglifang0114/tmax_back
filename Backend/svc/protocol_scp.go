@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
 	m "tmaxsrv/comm"
+	l "tmaxsrv/log"
 )
 
 // ProtocolParser 定义了协议解析的函数签名
@@ -35,12 +37,17 @@ var protocolParsers = map[string]ProtocolParser{
 	"SCP-21": parseSCP21,
 }
 
+var overloadRegex = regexp.MustCompile(`(?:^|[^a-zA-Z])(OL|UL)(?:[^a-zA-Z]|$)`)
+
 // DispatchProtocolParser 根据协议名调度相应的解析函数
 func DispatchProtocolParser(protocolName string, scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	dataStr := string(data)
-	if strings.Contains(dataStr, "UL") || strings.Contains(dataStr, "OL") {
+	l.Log.Debugf("DispatchProtocolParser invoked - ProtocolName: '%s', ScaleId: %d, Data: %q", protocolName, scaleId, dataStr)
+
+	// 使用正则严格匹配，避免误杀类似 "VOLTAGE", "HOLD", "NULL" 等词汇以及原生的二进制数据中的 0x4F 0x4C
+	if matches := overloadRegex.FindStringSubmatch(dataStr); matches != nil {
 		val := "-OL-"
-		if strings.Contains(dataStr, "UL") {
+		if matches[1] == "UL" {
 			val = "-UL-"
 		}
 		msg := WeightMsg{
