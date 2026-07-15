@@ -188,7 +188,7 @@ func NewSrvMgr(scaleMgr *ScaleMgr, quitch chan bool) *SrvMgr {
 		scales:             map[int64]*Scale{},
 		clientOfScales:     map[*Scale]*Client{},
 		clientOfService:    map[int64]*Client{},
-		recvWsClientMsg:    make(chan []byte),
+		recvWsClientMsg:    make(chan []byte, 1024),
 		register:           make(chan *Client),
 		unregister:         make(chan *Client),
 		addScale:           make(chan *Scale, 2),
@@ -353,12 +353,12 @@ func (h *SrvMgr) Run() {
 				// parse request for "get port list", "get scale list", "update scale conneciton",
 				//                   "create a new scale", delete a scale" or "close application"
 				l.Log.Infof("Got request from common channel %v\n", string(data["message"]))
-				parseMsgAndTrigEvt(h.scaleMgr, string(data["message"]))
+				go parseMsgAndTrigEvt(h.scaleMgr, string(data["message"]))
 
 			} else if scaleId > SERVICE_ID { // not for scale communication but for information purposes
 				//小服务的接口
 				l.Log.Infof("Got request from common channel %v\n", string(data["message"]))
-				parseMsgAndTrigEvtService(h.scaleMgr, string(data["message"]), scaleId)
+				go parseMsgAndTrigEvtService(h.scaleMgr, string(data["message"]), scaleId)
 			} else {
 				scale := h.scales[scaleId]
 				if scale == nil { // something wrong about scale id
@@ -382,7 +382,11 @@ func (h *SrvMgr) Run() {
 				client := h.clientOfScales[h.scales[scaleMessage.ScaleId]]
 				if client != nil {
 					outData, _ := json.Marshal(scaleMessage)
-					client.sendCh <- outData
+					select {
+					case client.sendCh <- outData:
+					default:
+						// channel full, drop message
+					}
 				}
 			}
 			// default:
@@ -404,8 +408,11 @@ func (h *SrvMgr) Run() {
 			println(h.scales)
 			outData, _ := json.Marshal(scaleMgrMessage)
 			if client != nil {
-				client.sendCh <- outData
-				l.Log.Debugf("ClientSendch---------- %v\n", string(outData))
+				select {
+				case client.sendCh <- outData:
+					l.Log.Debugf("ClientSendch---------- %v\n", string(outData))
+				default:
+				}
 			}
 		case recvScaleMgrMsgSrv := <-h.recvScaleMgrMsgSrv: //20241118 如何将数据传出去？9999999999  99999998
 			// handle the message from the scale
@@ -414,7 +421,10 @@ func (h *SrvMgr) Run() {
 			if recvScaleMgrMsgSrv.ScaleId > SERVICE_ID {
 				client := h.clientOfService[recvScaleMgrMsgSrv.ScaleId]
 				if client != nil {
-					client.sendCh <- outData
+					select {
+					case client.sendCh <- outData:
+					default:
+					}
 				}
 
 			} else {
@@ -423,7 +433,10 @@ func (h *SrvMgr) Run() {
 					if srvRel.ScaleId == recvScaleMgrMsgSrv.ScaleId && srvRel.IsUsed {
 						client := h.clientOfService[srvRel.SrvId]
 						if client != nil {
-							client.sendCh <- outData
+							select {
+							case client.sendCh <- outData:
+							default:
+							}
 						}
 
 					}
@@ -446,11 +459,11 @@ func (h *SrvMgr) Run() {
 				outData, _ := json.Marshal(scaleMessage)
 				// fmt.Printf("%v\n", scaleMessage)
 				l.Log.Debugf("%v\n", string(outData))
-				client.sendCh <- outData
+				select {
+				case client.sendCh <- outData:
+				default:
+				}
 			}
-		default:
-			time.Sleep(time.Microsecond * 100)
-			continue
 		}
 	}
 }

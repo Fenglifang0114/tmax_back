@@ -79,6 +79,11 @@ func (c *Client) readPump() {
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	c.conn.SetPingHandler(func(message string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		c.conn.WriteControl(websocket.PongMessage, []byte(message), time.Now().Add(writeWait))
+		return nil
+	})
 	for {
 		if c.isQuit {
 			break
@@ -90,6 +95,7 @@ func (c *Client) readPump() {
 			}
 			break
 		}
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 		l.Log.Debugf("%v\n", string(message))
 		data := map[string][]byte{
@@ -99,10 +105,16 @@ func (c *Client) readPump() {
 		}
 		userMessage, _ := json.Marshal(data)
 		if c.scaleId == 0 || c.scaleId > 999999900 { // for common wssocket to srvMgr
-			c.srvMgr.recvWsClientMsg <- userMessage
+			select {
+			case c.srvMgr.recvWsClientMsg <- userMessage:
+			default:
+				l.Log.Warnf("recvWsClientMsg full, dropped message")
+			}
 		} else { // for scale message
-			if len(c.recvCh) < CLIENT_RECV_CH_SIZE {
-				c.recvCh <- userMessage
+			select {
+			case c.recvCh <- userMessage:
+			default:
+				l.Log.Warnf("recvCh full, dropped message")
 			}
 		}
 		// log.Log.Debugf("got user message: %v", userMessage)
@@ -158,9 +170,6 @@ func (c *Client) writePump() {
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
-		default:
-			time.Sleep(time.Microsecond * 100)
-			continue
 		}
 	}
 	c.wgSndCh.Done()
