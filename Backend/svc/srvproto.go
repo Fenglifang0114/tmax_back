@@ -176,17 +176,17 @@ const (
 	REQ_OPEN_OUTPUT_PORT ReqType = "open_output_port" // with parameter of PortInfo	//写modbus线圈
 	REQ_READ_OUTPUT_PORT ReqType = "read_output_port" // with parameter of PortInfo	//读modbus线圈
 
-	REQ_GET_AUTO_SCAN    ReqType = "get_auto_scan"    //获取自动扫描串口配置
-	REQ_SET_AUTO_SCAN    ReqType = "set_auto_scan"    //设置自动扫描串口配置
+	REQ_GET_AUTO_SCAN ReqType = "get_auto_scan" //获取自动扫描串口配置
+	REQ_SET_AUTO_SCAN ReqType = "set_auto_scan" //设置自动扫描串口配置
 )
 
 type ReqAddScale struct {
 	ScaleModel string
 	ScaleSn    string
 	// MediaType  MediaType
-	MediaConf MediaConf // will be ComInfo/NetInfo/BtInfo according to the media type
-	ModbusId  int       // 关联的 Modbus 从机站号
-	ProtocolName string // 协议名称
+	MediaConf    MediaConf // will be ComInfo/NetInfo/BtInfo according to the media type
+	ModbusId     int       // 关联的 Modbus 从机站号
+	ProtocolName string    // 协议名称
 }
 
 type ReqDelScale struct {
@@ -196,9 +196,9 @@ type ReqDelScale struct {
 type ReqModifyScale struct {
 	ScaleId int64
 	// MediaType MediaType
-	MediaConf  MediaConf
-	ScaleModel string
-	ModbusId   int // 关联的 Modbus 从机站号
+	MediaConf    MediaConf
+	ScaleModel   string
+	ModbusId     int    // 关联的 Modbus 从机站号
 	ProtocolName string // 协议名称
 }
 
@@ -210,7 +210,7 @@ type ReqModifyScaleName struct {
 type ReqModifyScaleSn struct {
 	ScaleId    int64
 	Sn         string
-	ScaleModel string
+	InnerModel string
 }
 
 type ReqAddPlu struct {
@@ -963,10 +963,10 @@ const (
 	SCALE_MGR_RESP_CAL_LOG_ADD   ScaleMgrRespMsgType = "resp_cal_log_add"   //新增校准日志记录
 	SCALE_MGR_RESP_SCALE_LOG_ADD ScaleMgrRespMsgType = "resp_scale_log_add" //新增称重日志记录
 
-	SCALE_MGR_RESP_ADD_RAW_TYPE    ScaleMgrRespMsgType = "resp_add_raw_type"
-	SCALE_MGR_RESP_DEL_RAW_TYPE    ScaleMgrRespMsgType = "resp_del_raw_type"
-	SCALE_MGR_RESP_EDIT_RAW_TYPE   ScaleMgrRespMsgType = "resp_edit_raw_type"
-	SCALE_MGR_RESP_GET_RAW_TYPE    ScaleMgrRespMsgType = "resp_get_raw_type"
+	SCALE_MGR_RESP_ADD_RAW_TYPE  ScaleMgrRespMsgType = "resp_add_raw_type"
+	SCALE_MGR_RESP_DEL_RAW_TYPE  ScaleMgrRespMsgType = "resp_del_raw_type"
+	SCALE_MGR_RESP_EDIT_RAW_TYPE ScaleMgrRespMsgType = "resp_edit_raw_type"
+	SCALE_MGR_RESP_GET_RAW_TYPE  ScaleMgrRespMsgType = "resp_get_raw_type"
 
 	// Modbus
 	SCALE_MGR_RESP_MODBUS_SERVICES ScaleMgrRespMsgType = "resp_modbus_services"
@@ -1164,17 +1164,17 @@ const (
 	SREQ_GET_DECIMAL_VALUE    SReqType = "get_decimal_value"    //20250716
 	SREQ_SET_SERIAL_PORT      SReqType = "set_serial_port"
 	SREQ_GET_SERIAL_PORT      SReqType = "get_serial_port"
-	SREQ_SET_WEIGHT_UNIT      SReqType = "set_weight_unit"      //20250716
-	SREQ_GET_WEIGHT_UNIT      SReqType = "get_weight_unit"      //20250716
-	SREQ_SET_INITIAL_ZERO     SReqType = "set_initial_zero"     //20250716
-	SREQ_GET_INITIAL_ZERO     SReqType = "get_initial_zero"     //20250716
-	SREQ_SET_MANUAL_ZERO      SReqType = "set_manual_zero"      //20250716
-	SREQ_GET_MANUAL_ZERO      SReqType = "get_manual_zero"      //20250716
-	SREQ_SET_ZERO_TRACKING    SReqType = "set_zero_tracking"    //20250716
-	SREQ_GET_ZERO_TRACKING    SReqType = "get_zero_tracking"    //20250716
-	SREQ_SET_GRAV_ACC         SReqType = "set_grav_acc"         //20250716
-	SREQ_GET_GRAV_ACC         SReqType = "get_grav_acc"         //20250716
-	SREQ_SET_FORCE_UNTARE     SReqType = "force_untare"         //20251104
+	SREQ_SET_WEIGHT_UNIT      SReqType = "set_weight_unit"   //20250716
+	SREQ_GET_WEIGHT_UNIT      SReqType = "get_weight_unit"   //20250716
+	SREQ_SET_INITIAL_ZERO     SReqType = "set_initial_zero"  //20250716
+	SREQ_GET_INITIAL_ZERO     SReqType = "get_initial_zero"  //20250716
+	SREQ_SET_MANUAL_ZERO      SReqType = "set_manual_zero"   //20250716
+	SREQ_GET_MANUAL_ZERO      SReqType = "get_manual_zero"   //20250716
+	SREQ_SET_ZERO_TRACKING    SReqType = "set_zero_tracking" //20250716
+	SREQ_GET_ZERO_TRACKING    SReqType = "get_zero_tracking" //20250716
+	SREQ_SET_GRAV_ACC         SReqType = "set_grav_acc"      //20250716
+	SREQ_GET_GRAV_ACC         SReqType = "get_grav_acc"      //20250716
+	SREQ_SET_FORCE_UNTARE     SReqType = "force_untare"      //20251104
 
 	SREQ_GET_MODEL       SReqType = "get_model"
 	SREQ_EN_CODE         SReqType = "en_code"

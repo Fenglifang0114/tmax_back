@@ -199,7 +199,7 @@ func (c *Scale) CheckSerialPort() (*ScaleRespMsg, error) {
 
 		req := ReqModifyScaleSn{
 			ScaleId:    c.Id,
-			ScaleModel: modelName,
+			InnerModel: modelName,
 			Sn:         "",
 		}
 		c.scaleMgr.UpdateScaleSn(req)
@@ -220,7 +220,7 @@ func (c *Scale) CheckSerialPort() (*ScaleRespMsg, error) {
 	if err == nil {
 		req := ReqModifyScaleSn{
 			ScaleId:    c.Id,
-			ScaleModel: dataStruct.ModelName,
+			InnerModel: dataStruct.ModelName,
 			Sn:         dataStruct.ScaleSn,
 		}
 		c.scaleMgr.UpdateScaleSn(req)

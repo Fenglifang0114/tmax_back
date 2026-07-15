@@ -147,7 +147,7 @@ func (d *DbScaleConn) UpdateScaleSn(conn ScaleConnMedia) error {
 
 	// 使用Updates函数时，只传入需要更新的字段
 	result := db.Model(&conn).Where("scale_id=?", conn.ScaleId).Updates(map[string]interface{}{
-		"ScaleModel": conn.ScaleModel,
+		"InnerModel": conn.InnerModel,
 		"ScaleSn":    conn.ScaleSn,
 	})
 	rowAffected := result.RowsAffected
