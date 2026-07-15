@@ -1278,24 +1278,44 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 			nextScaleId = maxScaleID + 1
 		}
 		scaleCat := comm.SCALE_TMAX
-		if req.ScaleModel == "DC500" {
-			scaleCat = comm.SCALE_C51
-		}
 		scaleName := "Scale" + strconv.FormatInt(nextScaleId, 10)
 		var comInfo ComInfo = ComInfo{DevPath: reqComInfo.DevPath, Baud: reqComInfo.Baud, DataBits: 8, Parity: 0, StopBits: 0}
 		var conf MediaConf = MediaConf{}
 		conf.Type = MEDIA_COM
 		conf.MediaInfoJson, _ = json.MarshalToString(comInfo)
 		
-		mModel := req.ScaleModel
-		if mModel == "" {
-			mModel = "T-Max"
+		customModel := req.ScaleModel
+		if customModel == "" {
+			customModel = "T-Max"
 		}
-		mSn := req.ScaleSn
-		if mSn == "" {
-			mSn = getSn()
+		var mSn string
+		var modbusId int
+		if req.ProtocolName == "SCP-X" {
+			mSn = req.ScaleSn
+			if mSn == "" {
+				mSn = getSn()
+			}
+			modbusId = req.ModbusId
+		} else {
+			mSn = ""
+			modbusId = 0
 		}
-		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: mModel, ScaleSn: mSn, TMedia: MEDIA_COM, MediaConf: conf, IsDefault: true, ScaleName: scaleName, ModbusId: req.ModbusId}
+		
+		scaleConn := &ScaleConnMedia{
+			IsOnline:     false,
+			ScaleCat:     scaleCat,
+			ScaleId:      nextScaleId,
+			ScaleModel:   customModel,
+			CustomModel:  customModel,
+			InnerModel:   customModel,
+			ProtocolName: req.ProtocolName,
+			ScaleSn:      mSn,
+			TMedia:       MEDIA_COM,
+			MediaConf:    conf,
+			IsDefault:    true,
+			ScaleName:    scaleName,
+			ModbusId:     modbusId,
+		}
 		s.connPb.connPb.InsertScaleConn(*scaleConn)
 		s.AddMediaList(scaleConn.ScaleId, *scaleConn)
 
@@ -1344,9 +1364,6 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 			nextScaleId = maxScaleID + 1
 		}
 		scaleCat := comm.SCALE_TMAX
-		if req.ScaleModel == "DC500" {
-			scaleCat = comm.SCALE_C51
-		}
 		scaleName := "Scale" + strconv.FormatInt(nextScaleId, 10)
 
 		var btInfo BtInfo = BtInfo{Mac: reqBtInfo.Mac, Name: reqBtInfo.Name}
@@ -1354,11 +1371,38 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		conf.Type = MEDIA_BT
 		conf.MediaInfoJson, _ = json.MarshalToString(btInfo)
 		
-		mModel := req.ScaleModel
-		if mModel == "" {
-			mModel = "T-Max"
+		customModel := req.ScaleModel
+		if customModel == "" {
+			customModel = "T-Max"
 		}
-		scaleConn := &ScaleConnMedia{IsOnline: false, ScaleCat: scaleCat, ScaleId: nextScaleId, ScaleModel: mModel, ScaleSn: getSn(), TMedia: MEDIA_BT, MediaConf: conf, IsDefault: true, ScaleName: scaleName, ModbusId: req.ModbusId}
+		var mSn string
+		var modbusId int
+		if req.ProtocolName == "SCP-X" {
+			mSn = req.ScaleSn
+			if mSn == "" {
+				mSn = getSn()
+			}
+			modbusId = req.ModbusId
+		} else {
+			mSn = ""
+			modbusId = 0
+		}
+		
+		scaleConn := &ScaleConnMedia{
+			IsOnline:     false,
+			ScaleCat:     scaleCat,
+			ScaleId:      nextScaleId,
+			ScaleModel:   customModel,
+			CustomModel:  customModel,
+			InnerModel:   customModel,
+			ProtocolName: req.ProtocolName,
+			ScaleSn:      mSn,
+			TMedia:       MEDIA_BT,
+			MediaConf:    conf,
+			IsDefault:    true,
+			ScaleName:    scaleName,
+			ModbusId:     modbusId,
+		}
 		s.connPb.connPb.InsertScaleConn(*scaleConn)
 		s.AddMediaList(scaleConn.ScaleId, *scaleConn)
 
@@ -1411,14 +1455,38 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		nextScaleId = maxScaleID + 1
 	}
 
-	conn := &ScaleConnMedia{ScaleModel: req.ScaleModel, ScaleSn: getSn(), TMedia: req.MediaConf.Type, MediaConf: req.MediaConf}
-	conn.ScaleModel = "TMax"
-	conn.ScaleId = nextScaleId
-	conn.IsDefault = true
-	conn.IsOnline = true
-	conn.ScaleCat = comm.SCALE_TMAX
-	conn.ScaleName = "Scale" + strconv.FormatInt(conn.ScaleId, 10)
-	conn.ModbusId = req.ModbusId
+	customModel := req.ScaleModel
+	if customModel == "" {
+		customModel = "T-Max"
+	}
+	var mSn string
+	var modbusId int
+	if req.ProtocolName == "SCP-X" {
+		mSn = req.ScaleSn
+		if mSn == "" {
+			mSn = getSn()
+		}
+		modbusId = req.ModbusId
+	} else {
+		mSn = ""
+		modbusId = 0
+	}
+
+	conn := &ScaleConnMedia{
+		ScaleModel:   customModel,
+		CustomModel:  customModel,
+		InnerModel:   customModel,
+		ProtocolName: req.ProtocolName,
+		ScaleSn:      mSn,
+		TMedia:       req.MediaConf.Type,
+		MediaConf:    req.MediaConf,
+		ScaleId:      nextScaleId,
+		IsDefault:    true,
+		IsOnline:     true,
+		ScaleCat:     comm.SCALE_TMAX,
+		ScaleName:    "Scale" + strconv.FormatInt(nextScaleId, 10),
+		ModbusId:     modbusId,
+	}
 
 	var scale *Scale
 
@@ -1539,15 +1607,36 @@ func (s *ScaleMgr) UpdateScale(req ReqModifyScale) error {
 		return fmt.Errorf("can't find scale with id: %v", id)
 	}
 
-	composer := cmdComposerFuncMap[scale.ScaleCat]
-	scale.composer = &composer
 	conn := scale.Conn
 	if conn == nil {
 		return fmt.Errorf("can't find connection associated with the scale Id")
 	}
 
 	conn.MediaConf = req.MediaConf
-	conn.ModbusId = req.ModbusId
+	
+	customModel := req.ScaleModel
+	if customModel == "" {
+		customModel = "T-Max"
+	}
+	conn.ScaleModel = customModel
+	conn.CustomModel = customModel
+	conn.ProtocolName = req.ProtocolName
+	
+	if req.ProtocolName == "SCP-X" {
+		conn.ModbusId = req.ModbusId
+		// We do not modify SN or InnerModel here, they remain as they were (queried from scale)
+	} else {
+		conn.ModbusId = 0
+		conn.ScaleSn = ""
+		conn.InnerModel = customModel
+	}
+	conn.ScaleCat = comm.SCALE_TMAX
+	
+	scale.Model = conn.ScaleModel
+	scale.ScaleCat = conn.ScaleCat
+	scale.Sn = conn.ScaleSn
+	composer := cmdComposerFuncMap[scale.ScaleCat]
+	scale.composer = &composer
 
 	s.scales[id].ModifyMedia(req.MediaConf)
 	s.srvMgr.scaleMgr.ModifyMediaList(id, conn.MediaConf)

@@ -475,6 +475,16 @@ func (s *Scale) procScaleRespMsg() {
 					}
 					sendMsgIntoChsOrWeightToClient(s, msg)
 				} else if s.ScaleCat == m.SCALE_TMAX || s.ScaleCat == m.SCALE_TMAX_PASSTH {
+					// Route non-SCP-X protocols to DispatchProtocolParser
+					if s.Conn != nil && s.Conn.ProtocolName != "" && s.Conn.ProtocolName != "SCP-X" {
+						s.Conn.IsOnline = true
+						msg, err := DispatchProtocolParser(s.Conn.ProtocolName, s.Id, inPack.Payload)
+						if err != nil {
+							continue
+						}
+						sendMsgIntoChsOrWeightToClient(s, msg)
+						continue
+					}
 					// find message buffer that associate to the message
 
 					if s.isScalePassth {
@@ -533,6 +543,16 @@ func (s *Scale) procScaleRespMsg() {
 					}
 					sendMsgIntoChsOrWeightToClient(s, msg)
 				} else if s.ScaleCat == m.SCALE_TMAX || s.ScaleCat == m.SCALE_TMAX_PASSTH {
+					// Route non-SCP-X protocols to DispatchProtocolParser
+					if s.Conn != nil && s.Conn.ProtocolName != "" && s.Conn.ProtocolName != "SCP-X" {
+						s.Conn.IsOnline = true
+						msg, err := DispatchProtocolParser(s.Conn.ProtocolName, s.Id, inPack.Payload)
+						if err != nil {
+							continue
+						}
+						sendMsgIntoChsOrWeightToClient(s, msg)
+						continue
+					}
 					// find message buffer that associate to the message
 
 					if s.isScalePassth {
@@ -590,6 +610,16 @@ func (s *Scale) procScaleRespMsg() {
 					}
 					sendMsgIntoChsOrWeightToClient(s, msg)
 				} else if s.ScaleCat == m.SCALE_TMAX || s.ScaleCat == m.SCALE_TMAX_PASSTH {
+					// Route non-SCP-X protocols to DispatchProtocolParser
+					if s.Conn != nil && s.Conn.ProtocolName != "" && s.Conn.ProtocolName != "SCP-X" {
+						s.Conn.IsOnline = true
+						msg, err := DispatchProtocolParser(s.Conn.ProtocolName, s.Id, inPack.Payload)
+						if err != nil {
+							continue
+						}
+						sendMsgIntoChsOrWeightToClient(s, msg)
+						continue
+					}
 					// find message buffer that associate to the message
 
 					if s.isScalePassth {
@@ -2165,6 +2195,10 @@ func calculateMD5(input string) [16]byte {
 func openFactory(c *Scale) (*ScaleRespMsg, error, bool) {
 	if c.ScaleCat != m.SCALE_TMAX {
 		return &ScaleRespMsg{}, nil, false //20250905
+	}
+	if c.Conn != nil && c.Conn.ProtocolName != "SCP-X" {
+		sendScaleOnlineToUi(c, true, c.Model, c.Sn)
+		return &ScaleRespMsg{}, nil, true
 	}
 	res := false
 	composer := c.composer

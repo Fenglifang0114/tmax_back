@@ -186,6 +186,7 @@ type ReqAddScale struct {
 	// MediaType  MediaType
 	MediaConf MediaConf // will be ComInfo/NetInfo/BtInfo according to the media type
 	ModbusId  int       // 关联的 Modbus 从机站号
+	ProtocolName string // 协议名称
 }
 
 type ReqDelScale struct {
@@ -198,6 +199,7 @@ type ReqModifyScale struct {
 	MediaConf  MediaConf
 	ScaleModel string
 	ModbusId   int // 关联的 Modbus 从机站号
+	ProtocolName string // 协议名称
 }
 
 type ReqModifyScaleName struct {
