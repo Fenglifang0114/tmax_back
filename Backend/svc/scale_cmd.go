@@ -192,14 +192,19 @@ func (c *Scale) CheckSerialPort() (*ScaleRespMsg, error) {
 
 		}
 		var factoryInfo FIFromScale
+		modelName := "DC500"
+		if c.Conn != nil && c.Conn.InnerModel != "" {
+			modelName = c.Conn.InnerModel
+		}
+
 		req := ReqModifyScaleSn{
 			ScaleId:    c.Id,
-			ScaleModel: "DC500",
+			ScaleModel: modelName,
 			Sn:         "",
 		}
 		c.scaleMgr.UpdateScaleSn(req)
 
-		factoryInfo.ModelName = "DC500"
+		factoryInfo.ModelName = modelName
 		factoryInfo.ScaleSn = ""
 		msgBody, _ := json.MarshalToString(factoryInfo)
 		return &ScaleRespMsg{MsgType: m.CHECK_SERIAL_PORT_RESP, MsgBody: msgBody, ScaleId: c.Id}, nil
