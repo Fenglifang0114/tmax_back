@@ -115,7 +115,7 @@ func parseStandardSCP(data []byte) (WeightMsg, error) {
 	dataStr = strings.ReplaceAll(dataStr, ")", "")
 
 	// 匹配模式：ST或US, 接着 GS或NT, 可能有正负号，然后是数字，最后是单位
-	re := regexp.MustCompile(`(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)`)
+	re := regexp.MustCompile(`(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)`)
 	matches := re.FindStringSubmatch(dataStr)
 
 	if matches != nil && len(matches) >= 6 {
@@ -164,7 +164,7 @@ func parseSCP01(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-01 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -188,7 +188,7 @@ func parseSCP02(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-02 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -212,7 +212,7 @@ func parseSCP03(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-03 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -236,7 +236,7 @@ func parseSCP04(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-04 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -260,7 +260,7 @@ func parseSCP05(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-05 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -284,7 +284,7 @@ func parseSCP06(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-06 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -308,7 +308,7 @@ func parseSCP07(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-07 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -332,7 +332,7 @@ func parseSCP08(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-08 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -356,7 +356,7 @@ func parseSCP09(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-09 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -380,7 +380,7 @@ func parseSCP10(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-10 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -404,7 +404,7 @@ func parseSCP11(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-11 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -428,7 +428,7 @@ func parseSCP12(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-12 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -452,7 +452,7 @@ func parseSCP13(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-13 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -476,7 +476,7 @@ func parseSCP14(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-14 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -500,7 +500,7 @@ func parseSCP15(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-15 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -524,7 +524,7 @@ func parseSCP16(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-16 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -548,7 +548,7 @@ func parseSCP17(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-17 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -572,7 +572,7 @@ func parseSCP18(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-18 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -596,7 +596,7 @@ func parseSCP19(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-19 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -620,7 +620,7 @@ func parseSCP20(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-20 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {
@@ -644,7 +644,7 @@ func parseSCP21(scaleId int64, data []byte) (*ScaleRespMsg, error) {
 	
 	// TODO: 根据 SCP-21 图片的特定格式，在这里细化修改
 	// 例如修改正则，或者改为按字节索引 data[x:y] 截取
-	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z]*([a-zA-Z]+)")
+	re := regexp.MustCompile("(ST|US)[^A-Za-z]+(GS|NT)[^0-9+-]*([+-]?)[^0-9]*([0-9]+\\.[0-9]+|[0-9]+)[^a-zA-Z%]*([a-zA-Z%]+)")
 	matches := re.FindStringSubmatch(dataStr)
 	
 	if matches != nil && len(matches) >= 6 {

@@ -966,6 +966,14 @@ func (s *ScaleMgr) Run() {
 	}
 	for _, conn := range s.medias {
 		if conn.scale == nil {
+			// 在实例化之前，强行修正一次 ScaleCat，防止数据库里的历史脏数据导致类型错误
+			if conn.ProtocolName != "" {
+				conn.ScaleCat = comm.SCALE_TMAX
+				if conn.ProtocolName != "SCP-X" {
+					conn.ScaleCat = comm.SCALE_C51
+				}
+			}
+
 			// new scale and assign scaleid to the instance
 			var scale *Scale
 			scale, _ = NewScale(s, conn, conn.ScaleCat, conn.ScaleModel, conn.ScaleSn, false)
@@ -978,7 +986,7 @@ func (s *ScaleMgr) Run() {
 		}
 	}
 
-	StartAutoMountTask(s)
+	// StartAutoMountTask(s)
 
 	for {
 
@@ -1286,7 +1294,7 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		var conf MediaConf = MediaConf{}
 		conf.Type = MEDIA_COM
 		conf.MediaInfoJson, _ = json.MarshalToString(comInfo)
-		
+
 		customModel := req.ScaleModel
 		if customModel == "" {
 			customModel = "T-Max"
@@ -1303,7 +1311,7 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 			mSn = ""
 			modbusId = 0
 		}
-		
+
 		scaleConn := &ScaleConnMedia{
 			IsOnline:     false,
 			ScaleCat:     scaleCat,
@@ -1376,7 +1384,7 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		var conf MediaConf = MediaConf{}
 		conf.Type = MEDIA_BT
 		conf.MediaInfoJson, _ = json.MarshalToString(btInfo)
-		
+
 		customModel := req.ScaleModel
 		if customModel == "" {
 			customModel = "T-Max"
@@ -1393,7 +1401,7 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 			mSn = ""
 			modbusId = 0
 		}
-		
+
 		scaleConn := &ScaleConnMedia{
 			IsOnline:     false,
 			ScaleCat:     scaleCat,
@@ -1624,28 +1632,34 @@ func (s *ScaleMgr) UpdateScale(req ReqModifyScale) error {
 	}
 
 	conn.MediaConf = req.MediaConf
-	
-	customModel := req.ScaleModel
-	if customModel == "" {
-		customModel = "T-Max"
+
+	// 允许修改协议名称和机种名称，前提是前端传了有效值（非空）。防止空数据覆盖现有配置
+	if req.ProtocolName != "" {
+		conn.ProtocolName = req.ProtocolName
 	}
-	conn.ScaleModel = customModel
-	conn.CustomModel = customModel
-	conn.ProtocolName = req.ProtocolName
-	
-	if req.ProtocolName == "SCP-X" {
-		conn.ModbusId = req.ModbusId
-		// We do not modify SN or InnerModel here, they remain as they were (queried from scale)
+
+	if req.ScaleModel != "" {
+		conn.ScaleModel = req.ScaleModel
+		conn.CustomModel = req.ScaleModel
+	}
+
+	if conn.ProtocolName == "SCP-X" {
+		// 仅允许修改 ModbusId (如果有传)
+		if req.ModbusId != 0 {
+			conn.ModbusId = req.ModbusId
+		}
 	} else {
 		conn.ModbusId = 0
 		conn.ScaleSn = ""
-		conn.InnerModel = customModel
+		conn.InnerModel = conn.ScaleModel
 	}
+
+	// 重新计算 ScaleCat
 	conn.ScaleCat = comm.SCALE_TMAX
-	if req.ProtocolName != "SCP-X" {
+	if conn.ProtocolName != "SCP-X" {
 		conn.ScaleCat = comm.SCALE_C51
 	}
-	
+
 	scale.Model = conn.ScaleModel
 	scale.ScaleCat = conn.ScaleCat
 	scale.Sn = conn.ScaleSn
