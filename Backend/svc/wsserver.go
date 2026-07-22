@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"tmaxsrv/log"
+	"tmaxsrv/prnfmt"
 )
 
 const (
@@ -50,6 +51,11 @@ func NewWsServer() *WsServer {
 }
 
 func (s *WsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/api/print/online" {
+		prnfmt.HandlePrintOnline(w, r)
+		return
+	}
+
 	if r.URL.Path != "/tmax" {
 		httpCode := http.StatusInternalServerError
 		reasePhrase := http.StatusText(httpCode)
