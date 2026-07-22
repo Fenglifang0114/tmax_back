@@ -358,7 +358,16 @@ func GetServicePath() string {
 
 func GetSrvDataPath() string {
 	myPath := GetExePath()
-	return filepath.Join(myPath, SRV_DATA_PATH)
+	p := filepath.Join(myPath, SRV_DATA_PATH)
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		if _, err := os.Stat(SRV_DATA_PATH); err == nil {
+			return SRV_DATA_PATH
+		}
+		if _, err := os.Stat(filepath.Join("..", SRV_DATA_PATH)); err == nil {
+			return filepath.Join("..", SRV_DATA_PATH)
+		}
+	}
+	return p
 }
 
 func GetExePath() string {

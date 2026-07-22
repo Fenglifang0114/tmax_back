@@ -49,6 +49,13 @@ var (
 )
 
 func findPrinterName(s string) string {
+	lines := strings.Split(s, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(strings.TrimRight(line, "\r"))
+		if strings.HasPrefix(trimmed, "F,") {
+			return trimmed
+		}
+	}
 	parts := strings.Split(s, "\r\n")
 	if len(parts) >= 2 {
 		return parts[len(parts)-2]
@@ -84,6 +91,103 @@ func ParserFmtToBytes(utf8Buff string, printerModel string, fmtLen int) ([]byte,
 		return buffer.Bytes(), true
 	}
 	return nil, false
+}
+
+// ParserFmtToRawCmd 解析格式为纯打印指令，不包含秤头结构体、0xFF填充及帧尾。
+// 从 CSV 内容内含的 `F,协议名,模式` 自动提取打印机协议和 Lable/Receipt 模式。
+// 专门用于在线打印 (Print Online)，完全不影响下发给秤的 ParserFmtToBuf / ParserRptFmtToBuf 逻辑。
+func ParserFmtToRawCmd(utf8Buff string) (*bytes.Buffer, []VarStruct) {
+	printerModel := ""
+	printMode := ""
+	prtInfo := findPrinterName(utf8Buff)
+	if strings.Contains(prtInfo, "F,") {
+		parts := strings.Split(prtInfo, ",")
+		if len(parts) >= 2 {
+			printerModel = strings.ToUpper(strings.TrimSpace(parts[1]))
+		}
+		if len(parts) >= 3 {
+			if strings.TrimSpace(parts[2]) == "L" {
+				printMode = "Lable"
+			} else {
+				printMode = "Receipt"
+			}
+		}
+	}
+
+	dataCamp := bytes.NewBufferString("")
+	lastVarPos := 0
+
+	var formatbuf *bytes.Buffer
+	var currentVars []VarStruct
+
+	if printMode != "Receipt" && printMode != "票据" {
+		// --- 标签模式 (Lable) ---
+		var clearList []VarStruct
+		VarList = clearList // 用于清空数据
+		var clearTable ScaleVarOrder
+		VarTable = clearTable // 用于清空数据
+
+		buff, _ := Utf8ToGb2312(utf8Buff)
+		if printerModel == "EPM205" {
+			dataCamp.Write(ESC_CHANGE_EPL_205)
+		}
+
+		if printerModel == "ZEBRA" {
+			formatbuf = ParseEplZebraLines(buff, dataCamp, lastVarPos)
+		} else if printerModel == "LP50" {
+			formatbuf = ParseEplLp50Lines(buff, dataCamp, lastVarPos)
+		} else if printerModel == "GODEX" {
+			formatbuf = ParseEzplLines(buff, dataCamp, lastVarPos)
+		} else if printerModel == "EPM205" {
+			formatbuf = ParseEplLines(buff, dataCamp, lastVarPos)
+		} else if printerModel == "TSC" {
+			formatbuf = ParseTscLines(buff, dataCamp, lastVarPos)
+		} else if printerModel == "SATO" {
+			formatbuf = ParseSbplLines(buff, dataCamp, lastVarPos)
+		} else {
+			formatbuf = ParseEplLines(buff, dataCamp, lastVarPos)
+		}
+
+		currentVars = make([]VarStruct, len(VarList))
+		copy(currentVars, VarList)
+	} else {
+		// --- 票据模式 (Receipt) ---
+		var clearList []RptVarStruct
+		RptVarList = clearList // 用于清空数据
+		var clearTable ScaleVarOrder
+		VarTable = clearTable // 用于清空数据
+
+		buff := utf8Buff
+		if printerModel == "EPM205" {
+			dataCamp.Write(ESC_CHANGE_ESC_205)
+		}
+
+		if printerModel == "LP50" {
+			formatbuf = ParseLP50Lines(buff, dataCamp, lastVarPos)
+		} else if printerModel == "ZEBRA" {
+			formatbuf = ParseRptZebraLines(buff, dataCamp, lastVarPos)
+		} else {
+			formatbuf = ParseEscLines(buff, dataCamp, lastVarPos)
+		}
+
+		// 将 RptVarStruct 统一转换为 VarStruct 供注入器使用
+		currentVars = make([]VarStruct, len(RptVarList))
+		for i, rv := range RptVarList {
+			currentVars[i] = VarStruct{
+				id:       uint16(rv.id),
+				startPos: rv.startPos,
+				endPos:   uint16(rv.maxLen),
+				align:    uint16(rv.align),
+				maxlen:   uint16(rv.maxLen),
+			}
+		}
+	}
+
+	fmt.Println("formatbuf.Bytes() =============================")
+	fmt.Println(string(formatbuf.Bytes()))
+	fmt.Println("formatbuf.Bytes() =============================")
+
+	return formatbuf, currentVars
 }
 
 func ParserFmtToBuf(utf8Buff string, printerModel string, fmtLen int) *bytes.Buffer {
@@ -308,8 +412,6 @@ func binaryData(tempInfo printInfo) *bytes.Buffer {
 	return buf
 }
 
-
-
 // Utf8ToGb2312 将UTF-8字符串转换为GB2312编码
 func Utf8ToGb2312(buff string) (string, error) {
 	utf8str := buff
@@ -334,7 +436,7 @@ func ParserDefFmtToBytes(fmtDataList []string, printerModel string, fmtLen int) 
 	} else {
 		return nil, false
 	}
-	
+
 	if buffer != nil && buffer.Len() > 0 {
 		return buffer.Bytes(), true
 	}

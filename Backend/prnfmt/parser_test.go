@@ -26,9 +26,27 @@ ROTATE,0`}, want: &mybuf},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ParserFmtToBuf(tt.args.utf8Buff, "EPM205", 2048); len(got.Bytes()) == 2048 {
-				t.Errorf("ParserFmtToBuf() = %s,", got.Bytes())
+			if got := ParserFmtToBuf(tt.args.utf8Buff, "EPM205", 2048); len(got.Bytes()) != 2048 {
+				t.Errorf("ParserFmtToBuf() len = %d, expected 2048", len(got.Bytes()))
 			}
 		})
+	}
+}
+
+func TestParserFmtToRawCmd(t *testing.T) {
+	utf8Buff := `P,396,360
+TB,29,38,130,30,0,1,1,0,0,DATA,Net,000000,1,10,10
+ROTATE,0
+F,EPM205,L`
+
+	buf, vars := ParserFmtToRawCmd(utf8Buff)
+	if buf == nil || buf.Len() == 0 {
+		t.Fatalf("ParserFmtToRawCmd() returned empty buffer")
+	}
+	if len(buf.Bytes()) >= 2048 {
+		t.Errorf("ParserFmtToRawCmd() len = %d, expected raw command (much smaller than 2048)", len(buf.Bytes()))
+	}
+	if len(vars) == 0 {
+		t.Errorf("ParserFmtToRawCmd() vars length is 0, expected variables parsed")
 	}
 }
