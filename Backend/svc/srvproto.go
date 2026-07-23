@@ -147,6 +147,9 @@ const (
 	REQ_DELETE_DRAFT_FMA_WGT_REC   ReqType = "delete_draft_fma_wgt_rec"   //删除草稿配方称重记录
 	REQ_CREATE_DRAFT_FMA_WGT_REC   ReqType = "create_draft_fma_wgt_rec"   //创建草稿配方称重记录
 
+	REQ_PT10_CONNECT     ReqType = "pt10_connect"
+	REQ_PT10_WRITE_PARAM ReqType = "pt10_write_param"
+
 	REQ_ADD_SYS_USER     ReqType = "add_sys_user"     //新增系统用户
 	REQ_DELETE_SYS_USER  ReqType = "delete_sys_user"  //删除系统用户
 	REQ_UPDATE_SYS_USER  ReqType = "update_sys_user"  //更新系统用户
@@ -817,6 +820,17 @@ type ReqExportAllRecs struct {
 	FieldName   []string
 }
 
+type ReqPT10Connect struct {
+	Port     string `json:"Port"`
+	BaudRate int    `json:"BaudRate"`
+}
+
+type ReqPT10WriteParam struct {
+	Port      string            `json:"Port"`
+	BaudRate  int               `json:"BaudRate"`
+	CmdParams map[string]string `json:"CmdParams"`
+}
+
 // ********** Response of scale manager **********
 type ScaleMgrRespMsg struct {
 	MsgType ScaleMgrRespMsgType
@@ -995,6 +1009,9 @@ const (
 
 	SCALE_MGR_RESP_GET_AUTO_SCAN ScaleMgrRespMsgType = "resp_get_auto_scan" // auto scan setting
 	SCALE_MGR_RESP_SET_AUTO_SCAN ScaleMgrRespMsgType = "resp_set_auto_scan" // auto scan setting result
+
+	SCALE_MGR_RESP_PT10_CONNECT     ScaleMgrRespMsgType = "resp_pt10_connect"
+	SCALE_MGR_RESP_PT10_WRITE_PARAM ScaleMgrRespMsgType = "resp_pt10_write_param"
 )
 
 type PortsListMsg struct {

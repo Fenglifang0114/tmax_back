@@ -41,20 +41,15 @@ func procToScaleReq(s *Scale, req SRequest) {
 		}
 	}
 	// send msg to web socket client
+	if resp == nil {
+		return
+	}
 	result, _ := json.Marshal(resp)
 
 	if s.client != nil {
 		s.client.sendCh <- result
 
 	}
-
-	// if err != nil {
-	// 	if s.client.sendCh != nil {
-	// 		s.client.sendCh <- result
-	// 	}
-	// } else {
-	// 	l.Log.Errorf("Error on marshal resp: %v", err)
-	// }
 }
 
 var conversionMap map[SReqType]m.RespMsgType

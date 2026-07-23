@@ -1343,6 +1343,42 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 			SaveAutoScanConfig(false)
 		}
 		scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_SET_AUTO_SCAN, MsgBody: "ok"}
+	case REQ_PT10_CONNECT:
+		var data ReqPT10Connect
+		if err := json.UnmarshalFromString(req.ReqData, &data); err != nil {
+			l.Log.Error(err)
+			scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_PT10_CONNECT, MsgBody: "error: failed to parse connection data"}
+		} else {
+			connected, err := PT10TestConnection(data.Port, data.BaudRate)
+			if err != nil || !connected {
+				errMsg := "connection failed"
+				if err != nil {
+					errMsg = err.Error()
+				}
+				scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_PT10_CONNECT, MsgBody: "error: " + errMsg}
+			} else {
+				params, err := PT10ReadAllParams(data.Port, data.BaudRate)
+				if err != nil {
+					scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_PT10_CONNECT, MsgBody: "error: connected but failed to read parameters: " + err.Error()}
+				} else {
+					paramsStr, _ := json.MarshalToString(params)
+					scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_PT10_CONNECT, MsgBody: paramsStr}
+				}
+			}
+		}
+	case REQ_PT10_WRITE_PARAM:
+		var data ReqPT10WriteParam
+		if err := json.UnmarshalFromString(req.ReqData, &data); err != nil {
+			l.Log.Error(err)
+			scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_PT10_WRITE_PARAM, MsgBody: "error: failed to parse write data"}
+		} else {
+			err := PT10WriteParams(data.Port, data.BaudRate, data.CmdParams)
+			if err != nil {
+				scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_PT10_WRITE_PARAM, MsgBody: "error: " + err.Error()}
+			} else {
+				scaleMgr.srvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_PT10_WRITE_PARAM, MsgBody: "ok"}
+			}
+		}
 	}
 
 }
