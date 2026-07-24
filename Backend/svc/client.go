@@ -72,6 +72,7 @@ type Client struct {
 func (c *Client) readPump() {
 	c.wgRecvCh.Add(1)
 	defer func() {
+		c.wgRecvCh.Done()
 		c.srvMgr.unregister <- c
 		// c.sendCh = nil
 		c.conn.Close()
@@ -119,7 +120,6 @@ func (c *Client) readPump() {
 		}
 		// log.Log.Debugf("got user message: %v", userMessage)
 	}
-	c.wgRecvCh.Done()
 }
 
 // writePump pumps messages from the hub to the websocket connection.
@@ -133,6 +133,7 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
+		c.wgSndCh.Done()
 	}()
 	for {
 		if c.isQuit {
@@ -172,7 +173,6 @@ func (c *Client) writePump() {
 			}
 		}
 	}
-	c.wgSndCh.Done()
 }
 
 func (c *Client) Close() error {

@@ -447,7 +447,7 @@ func (s *Scale) procScaleRespMsg() {
 				break
 			}
 			if s.MySerial == nil {
-				time.Sleep(time.Microsecond * 100)
+				time.Sleep(time.Millisecond * 5)
 				continue
 			}
 			select {
@@ -511,7 +511,7 @@ func (s *Scale) procScaleRespMsg() {
 
 				}
 			default:
-				time.Sleep(time.Microsecond * 100)
+				time.Sleep(time.Millisecond * 5)
 				continue
 			}
 		}
@@ -580,7 +580,7 @@ func (s *Scale) procScaleRespMsg() {
 
 				}
 			default:
-				time.Sleep(time.Microsecond * 100)
+				time.Sleep(time.Millisecond * 5)
 				continue
 			}
 		}
@@ -649,7 +649,7 @@ func (s *Scale) procScaleRespMsg() {
 
 				}
 			default:
-				time.Sleep(time.Microsecond * 100)
+				time.Sleep(time.Millisecond * 5)
 				continue
 			}
 		}
@@ -692,7 +692,7 @@ func (s *Scale) procToScaleMsg() {
 				go procToScaleReq(s, req) // TODO: handle error
 			}
 		default:
-			time.Sleep(time.Microsecond * 100)
+			time.Sleep(time.Millisecond * 5)
 			continue
 		}
 	}
