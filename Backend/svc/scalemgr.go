@@ -1027,7 +1027,7 @@ func (s *ScaleMgr) ModifyScaleInfo(scaleId int64, modelName string, sn string) e
 	isFound := false
 	for i, media := range s.medias {
 		if media.ScaleId == scaleId {
-			s.medias[i].ScaleModel = modelName
+			s.medias[i].InnerModel = modelName
 			s.medias[i].ScaleSn = sn
 			isFound = true
 			break
@@ -1713,7 +1713,7 @@ func (s *ScaleMgr) UpdateScaleSn(req ReqModifyScaleSn) error {
 	conn := scale.Conn
 	conn.InnerModel = req.InnerModel
 	conn.ScaleSn = scale.Sn
-	s.srvMgr.scaleMgr.ModifyScaleInfo(id, conn.ScaleModel, req.Sn)
+	s.srvMgr.scaleMgr.ModifyScaleInfo(id, req.InnerModel, req.Sn)
 	s.connPb.connPb.UpdateScaleSn(*conn)
 	return nil
 }
