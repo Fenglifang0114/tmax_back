@@ -58,6 +58,7 @@ func init() {
 		0xe402:                           m.TARE_UNSTABLE_CMD_RESP,
 		0xe103:                           m.ZERO_CMD_RESP,
 		0xe105:                           m.TARE_CMD_RESP,
+		0xe106:                           m.SET_PRE_TARE_S15_RESP,
 		0xe101:                           m.WEIGHT_DATA_RESP,
 		0xfff3:                           m.REG_WEIGHT_RESP,
 		0xe108:                           m.UNREG_WEIGHT_RESP,
@@ -143,6 +144,7 @@ func init() {
 		cmd.CMDID_GET_NET_WEIGHT_TMAX:      m.GET_NET_WEIGHT_RESP,
 		cmd.CMDID_GET_TARE_WEIGHT_TMAX:     m.GET_TARE_WEIGHT_RESP,
 		cmd.CMDID_GET_PRE_TARE_WEIGHT_TMAX: m.GET_PRE_TARE_WEIGHT_RESP,
+		cmd.CMDID_SET_PRE_TARE_WEIGHT_TMAX: m.SET_PRE_TARE_S15_RESP,
 
 		cmd.CMDID_GET_SEAL_STATUS_TMAX:      m.GET_SEAL_STATUS_RESP,
 		cmd.CMDID_SET_SOFT_SEAL_TMAX:        m.SOFT_SEAL_RESP,
@@ -234,6 +236,7 @@ func init() {
 		m.GET_NET_WEIGHT_RESP:       handleGetNetWeightResp,
 		m.GET_TARE_WEIGHT_RESP:      handleGetTareWeightResp,
 		m.GET_PRE_TARE_WEIGHT_RESP:  handleGetPreTareWeightResp,
+		m.SET_PRE_TARE_S15_RESP:     handleSetPreTareS15Resp,
 		m.SET_INITIAL_ZERO_RESP:     handleSetInitialZeroResp,
 		m.SET_MANUAL_ZERO_RESP:      handleSetManualZeroResp,
 		m.SET_ZERO_TRACKING_RESP:    handleSetZeroTrackingResp,
@@ -987,6 +990,13 @@ func handleGetTareWeightResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
 
 func handleGetPreTareWeightResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
 	return parseWeightFloatResp(scaleId, m.GET_PRE_TARE_WEIGHT_RESP, data)
+}
+
+func handleSetPreTareS15Resp(scaleId int64, data []byte) (ScaleRespMsg, int) {
+	if len(data) > 0 && data[0] == 0x06 {
+		return ScaleRespMsg{ScaleId: scaleId, MsgType: m.SET_PRE_TARE_S15_RESP, MsgBody: "ok"}, len(data)
+	}
+	return ScaleRespMsg{ScaleId: scaleId, MsgType: m.SET_PRE_TARE_S15_RESP, MsgBody: "fail"}, len(data)
 }
 
 func parseWeightFloatResp(scaleId int64, msgType m.RespMsgType, data []byte) (ScaleRespMsg, int) {

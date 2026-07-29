@@ -5,6 +5,8 @@ import (
 	"net"
 	"testing"
 	"time"
+	"tmaxsrv/cmd"
+	m "tmaxsrv/comm"
 )
 
 func TestModbusTCPServer(t *testing.T) {
@@ -105,4 +107,86 @@ func TestModbusTCPServer(t *testing.T) {
 	// The data should represent the weight 12.34 (float32)
 	// We just ensure it sent 4 bytes
 	t.Logf("Test Passed! Modbus TCP Server is working.")
+}
+
+func TestModbusTCPPreTare(t *testing.T) {
+	srvMgr := &SrvMgr{
+		scaleMgr: &ScaleMgr{
+			scales: make(map[int64]*Scale),
+		},
+	}
+	c := cmd.NewComposerTMAX()
+	mockScale := &Scale{
+		Id:           1,
+		Model:        "S15",
+		composer:     c,
+		respChansMap: make(map[m.RespMsgType][]chan *ScaleRespMsg),
+	}
+	srvMgr.scaleMgr.scales[1] = mockScale
+
+	info := ModbusServiceInfo{
+		Id:             2,
+		TargetModbusId: 1,
+		Protocol:       "Modbus TCP",
+		Port:           "5021",
+	}
+
+	tcpServer := NewModbusTCPServer(info, srvMgr)
+	if err := tcpServer.Start(); err != nil {
+		t.Fatalf("Failed to start Modbus TCP server: %v", err)
+	}
+	defer tcpServer.Stop()
+
+	time.Sleep(100 * time.Millisecond)
+
+	conn, err := net.Dial("tcp", "127.0.0.1:5021")
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// 1. Send Frame 1: 00 02 00 00 00 06 01 06 9C 54 3F 05 (MSB for 0.52)
+	frame1Hex := "00020000000601069C543F05"
+	frame1Bytes, _ := hex.DecodeString(frame1Hex)
+	conn.Write(frame1Bytes)
+
+	respBuf := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err := conn.Read(respBuf)
+	if err != nil {
+		t.Fatalf("Frame 1 response error: %v", err)
+	}
+	if hex.EncodeToString(respBuf[:n]) != "00020000000601069c543f05" {
+		t.Errorf("Frame 1 response mismatch: got %x", respBuf[:n])
+	}
+
+	// 2. Send Frame 2: 00 03 00 00 00 06 01 06 9C 55 1E B8 (LSB for 0.52)
+	frame2Hex := "00030000000601069C551EB8"
+	frame2Bytes, _ := hex.DecodeString(frame2Hex)
+	conn.Write(frame2Bytes)
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err = conn.Read(respBuf)
+	if err != nil {
+		t.Fatalf("Frame 2 response error: %v", err)
+	}
+	if hex.EncodeToString(respBuf[:n]) != "00030000000601069c551eb8" {
+		t.Errorf("Frame 2 response mismatch: got %x", respBuf[:n])
+	}
+
+	// 3. Send 0x10 Multiple Write Frame: 00 04 00 00 00 0B 01 10 9C 54 00 02 04 3F 05 1E B8
+	frame3Hex := "00040000000b01109c540002043f051eb8"
+	frame3Bytes, _ := hex.DecodeString(frame3Hex)
+	conn.Write(frame3Bytes)
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err = conn.Read(respBuf)
+	if err != nil {
+		t.Fatalf("Frame 3 (0x10) response error: %v", err)
+	}
+	if hex.EncodeToString(respBuf[:n]) != "00040000000601109c540002" {
+		t.Errorf("Frame 3 response mismatch: got %x", respBuf[:n])
+	}
+
+	t.Logf("TestModbusTCPPreTare Passed!")
 }

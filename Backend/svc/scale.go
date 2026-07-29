@@ -817,6 +817,9 @@ func (c *Scale) UnRegisterNotif(msgType m.RespMsgType, inCh chan *ScaleRespMsg) 
 func addNotif(s *Scale, msgType m.RespMsgType, inCh chan *ScaleRespMsg) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.respChansMap == nil {
+		s.respChansMap = make(map[m.RespMsgType][]chan *ScaleRespMsg)
+	}
 	s.respChansMap[msgType] = append(s.respChansMap[msgType], inCh)
 }
 
@@ -4697,6 +4700,9 @@ func ReqCalWeight(c *Scale, req SRequest) (*ScaleRespMsg, error) {
 
 // 设置S15预扣重
 func ReqSetPreTareS15(c *Scale, preTareStr string) (*ScaleRespMsg, error) {
+	if c == nil || c.composer == nil {
+		return &ScaleRespMsg{m.SET_PRE_TARE_S15_RESP, "scale composer is nil", 0}, nil
+	}
 	composer := c.composer
 	cmd, timeoutMs, err := composer.ComposeCmd(composer, m.CMD_SET_PRE_TARE_S15, m.CmdData{Type: m.DATA_TYPE_STR, Data: preTareStr})
 	if err != nil {

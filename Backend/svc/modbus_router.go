@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 	"strconv"
+	"strings"
 	"tmaxsrv/log"
 )
 
@@ -44,6 +45,17 @@ func RouteModbusRequest(packet []byte, targetModbusId int, srvMgr *SrvMgr) []byt
 	case 0x06:
 		value := binary.BigEndian.Uint16(packet[4:6])
 		return handleWriteSingleRegister(slaveID, startAddr, value, targetScale)
+	case 0x10:
+		if len(packet) < 9 {
+			return buildExceptionResponse(slaveID, funcCode, 0x03)
+		}
+		quantity := binary.BigEndian.Uint16(packet[4:6])
+		byteCount := packet[6]
+		if len(packet) < 7+int(byteCount) {
+			return buildExceptionResponse(slaveID, funcCode, 0x03)
+		}
+		data := packet[7 : 7+int(byteCount)]
+		return handleWriteMultipleRegisters(slaveID, startAddr, quantity, data, targetScale)
 	default:
 		return buildExceptionResponse(slaveID, funcCode, 0x01)
 	}
@@ -144,6 +156,14 @@ func handleReadHoldingRegisters(slaveID byte, startAddr uint16, count uint16, sc
 	return appendModbusCRC(response)
 }
 
+func isS15OrPreTareSupported(scale *Scale) bool {
+	if scale == nil {
+		return false
+	}
+	model := strings.ToUpper(strings.TrimSpace(scale.Model))
+	return model == "" || strings.Contains(model, "S15") || strings.Contains(model, "SCP") || strings.Contains(model, "TMAX") || strings.Contains(model, "T-MAX")
+}
+
 func handleWriteSingleRegister(slaveID byte, startAddr uint16, value uint16, scale *Scale) []byte {
 	success := false
 	if value == 256 {
@@ -158,7 +178,7 @@ func handleWriteSingleRegister(slaveID byte, startAddr uint16, value uint16, sca
 			success = true
 		case 25, 40026: // 0x19 or 0x9C5A
 			log.Log.Infof("Modbus Router: Executing Clear Tare on Scale %d", scale.Id)
-			if scale.Model == "S15" {
+			if isS15OrPreTareSupported(scale) {
 				ReqSetForceUnTare(scale, SRequest{})
 			} else {
 				scale.PerfTare()
@@ -167,52 +187,44 @@ func handleWriteSingleRegister(slaveID byte, startAddr uint16, value uint16, sca
 		}
 	}
 
-	// 针对 S15 的预扣重
+	// 针对 S15 / 预扣重
 	switch startAddr {
 	case 19, 40020: // 0x9C54 (MSB)
 		success = true
-		if scale.Model == "S15" {
-			scale.ModbusPreTareMSB = value
-			log.Log.Infof("Modbus Router: S15 Set Pre-Tare MSB to 0x%X", value)
-		}
+		scale.ModbusPreTareMSB = value
+		log.Log.Infof("Modbus Router: Scale %d Set Pre-Tare MSB to 0x%X", scale.Id, value)
 	case 20, 40021: // 0x9C55 (LSB)
 		success = true
-		if scale.Model == "S15" {
-			bits := (uint32(scale.ModbusPreTareMSB) << 16) | uint32(value)
-			preTareWeight := math.Float32frombits(bits)
-			log.Log.Infof("Modbus Router: S15 Set Pre-Tare to %f", preTareWeight)
-			preTareStr := strconv.FormatFloat(float64(preTareWeight), 'f', -1, 32)
-			ReqSetPreTareS15(scale, preTareStr)
-		}
+		bits := (uint32(scale.ModbusPreTareMSB) << 16) | uint32(value)
+		preTareWeight := math.Float32frombits(bits)
+		log.Log.Infof("Modbus Router: Scale %d Set Pre-Tare to %f", scale.Id, preTareWeight)
+		preTareStr := strconv.FormatFloat(float64(preTareWeight), 'f', -1, 32)
+		go ReqSetPreTareS15(scale, preTareStr)
 
 	// 针对 S15 的标定功能
 	case 30, 40030: // 0x9C5E
 		success = true // 无论是否 S15，都返回正确，以免主机报错
-		if scale.Model == "S15" {
+		if isS15OrPreTareSupported(scale) {
 			if value == 3 {
 				log.Log.Infof("Modbus Router: S15 Clear Flag")
 			} else if value == 1 {
 				log.Log.Infof("Modbus Router: S15 Set Zero Point")
-				ReqCalWeight(scale, SRequest{ReqData: "0"})
+				go ReqCalWeight(scale, SRequest{ReqData: "0"})
 			} else if value == 2 {
 				calWeightStr := strconv.Itoa(int(scale.ModbusCalWeight))
 				log.Log.Infof("Modbus Router: S15 Start Calibration with weight %s", calWeightStr)
-				ReqCalWeight(scale, SRequest{ReqData: calWeightStr})
+				go ReqCalWeight(scale, SRequest{ReqData: calWeightStr})
 			}
 		}
 	case 32, 40032: // 0x9C60 (MSB)
 		success = true
-		if scale.Model == "S15" {
-			scale.ModbusCalWeightMSB = value
-			log.Log.Infof("Modbus Router: S15 Set Cal Weight MSB to 0x%X", value)
-		}
+		scale.ModbusCalWeightMSB = value
+		log.Log.Infof("Modbus Router: Scale %d Set Cal Weight MSB to 0x%X", scale.Id, value)
 	case 33, 40033: // 0x9C61 (LSB)
 		success = true
-		if scale.Model == "S15" {
-			bits := (uint32(scale.ModbusCalWeightMSB) << 16) | uint32(value)
-			scale.ModbusCalWeight = math.Float32frombits(bits)
-			log.Log.Infof("Modbus Router: S15 Set Cal Weight to %f", scale.ModbusCalWeight)
-		}
+		bits := (uint32(scale.ModbusCalWeightMSB) << 16) | uint32(value)
+		scale.ModbusCalWeight = math.Float32frombits(bits)
+		log.Log.Infof("Modbus Router: Scale %d Set Cal Weight to %f", scale.Id, scale.ModbusCalWeight)
 	}
 
 	if !success {
@@ -224,6 +236,45 @@ func handleWriteSingleRegister(slaveID byte, startAddr uint16, value uint16, sca
 	response[1] = 0x06
 	binary.BigEndian.PutUint16(response[2:4], startAddr)
 	binary.BigEndian.PutUint16(response[4:6], value)
+
+	return appendModbusCRC(response)
+}
+
+func handleWriteMultipleRegisters(slaveID byte, startAddr uint16, quantity uint16, data []byte, scale *Scale) []byte {
+	if len(data) < int(quantity)*2 {
+		return buildExceptionResponse(slaveID, 0x10, 0x03)
+	}
+
+	success := false
+
+	switch startAddr {
+	case 19, 40020: // 0x9C54: 预扣重 Float32 (2 registers = 4 bytes)
+		if quantity >= 2 && len(data) >= 4 {
+			bits := binary.BigEndian.Uint32(data[0:4])
+			preTareWeight := math.Float32frombits(bits)
+			log.Log.Infof("Modbus Router (0x10): Scale %d Set Pre-Tare to %f", scale.Id, preTareWeight)
+			preTareStr := strconv.FormatFloat(float64(preTareWeight), 'f', -1, 32)
+			go ReqSetPreTareS15(scale, preTareStr)
+			success = true
+		}
+	case 32, 40032: // 0x9C60: 标定重量 Float32 (2 registers = 4 bytes)
+		if quantity >= 2 && len(data) >= 4 {
+			bits := binary.BigEndian.Uint32(data[0:4])
+			scale.ModbusCalWeight = math.Float32frombits(bits)
+			log.Log.Infof("Modbus Router (0x10): Scale %d Set Cal Weight to %f", scale.Id, scale.ModbusCalWeight)
+			success = true
+		}
+	}
+
+	if !success {
+		log.Log.Warnf("Modbus Router (0x10): Unhandled Write Multiple Addr: %d (0x%X), Quantity: %d", startAddr, startAddr, quantity)
+	}
+
+	response := make([]byte, 6+2)
+	response[0] = slaveID
+	response[1] = 0x10
+	binary.BigEndian.PutUint16(response[2:4], startAddr)
+	binary.BigEndian.PutUint16(response[4:6], quantity)
 
 	return appendModbusCRC(response)
 }
