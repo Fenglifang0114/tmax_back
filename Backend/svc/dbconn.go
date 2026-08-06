@@ -102,10 +102,22 @@ func (d *DbScaleConn) UpdateScaleConn(conn ScaleConnMedia) error {
 	if sqlDB != nil {
 		defer sqlDB.Close()
 	}
-	rowAffected := db.Model(&conn).Where("scale_id=?", conn.ScaleId).Select("MediaConf", "ModbusId", "ProtocolName").Updates(&conn).RowsAffected
+	tx := db.Model(&ScaleConnMedia{})
+	if conn.ScaleId != 0 {
+		tx = tx.Where("scale_id = ?", conn.ScaleId)
+	} else {
+		tx = tx.Where("scale_model = ? AND scale_sn = ?", conn.ScaleModel, conn.ScaleSn)
+	}
+
+	rowAffected := tx.Updates(map[string]interface{}{
+		"mediainfo_type":            conn.MediaConf.Type,
+		"mediainfo_media_info_json": conn.MediaConf.MediaInfoJson,
+		"modbus_id":                 conn.ModbusId,
+		"protocol_name":             conn.ProtocolName,
+	}).RowsAffected
 	if rowAffected == 0 {
-		return errors.New("@UpdateScaleConn failed, mybe record not existing")
-	} //写成save模式不生效，又改回来了
+		return errors.New("@UpdateScaleConn failed, maybe record not existing")
+	}
 
 	return nil
 }

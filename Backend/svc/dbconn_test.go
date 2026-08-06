@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"os"
 	"testing"
 )
 
@@ -54,6 +55,7 @@ func TestNewDbScaleConn(t *testing.T) {
 // }
 
 func TestDbScaleConn_InsertScaleConn(t *testing.T) {
+	os.Remove("test.db")
 	db, _ := NewDbScaleConn("test.db")
 	type args struct {
 		conn ScaleConnMedia
