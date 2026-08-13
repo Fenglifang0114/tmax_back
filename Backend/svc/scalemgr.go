@@ -1296,9 +1296,6 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		conf.MediaInfoJson, _ = json.MarshalToString(comInfo)
 
 		customModel := req.ScaleModel
-		if customModel == "" {
-			customModel = "T-Max"
-		}
 		var mSn string
 		var modbusId int
 		if req.ProtocolName == "SCP-X" {
@@ -1386,9 +1383,6 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 		conf.MediaInfoJson, _ = json.MarshalToString(btInfo)
 
 		customModel := req.ScaleModel
-		if customModel == "" {
-			customModel = "T-Max"
-		}
 		var mSn string
 		var modbusId int
 		if req.ProtocolName == "SCP-X" {
@@ -1470,9 +1464,6 @@ func (s *ScaleMgr) AddScale(req ReqAddScale) error {
 	}
 
 	customModel := req.ScaleModel
-	if customModel == "" {
-		customModel = "T-Max"
-	}
 	var mSn string
 	var modbusId int
 	if req.ProtocolName == "SCP-X" {
