@@ -1313,16 +1313,27 @@ func (d *DbFormulaInfo) GetAllFormulaLists() ([]FormulaList, error) {
 		return nil, err
 	}
 
-	for _, header := range headers {
-		var formulaDetails []FormulaDetail
-		err = db.Where("formula_rec_id = ?", header.RecId).Find(&formulaDetails).Error
-		if err != nil {
-			return nil, err
-		}
+	if len(headers) == 0 {
+		return formulaLists, nil
+	}
 
+	var headerIDs []int
+	for _, h := range headers {
+		headerIDs = append(headerIDs, h.RecId)
+	}
+
+	var allDetails []FormulaDetail
+	db.Where("formula_rec_id IN (?)", headerIDs).Order("sequence ASC").Find(&allDetails)
+
+	detailsMap := make(map[int][]FormulaDetail)
+	for _, det := range allDetails {
+		detailsMap[det.FormulaRecID] = append(detailsMap[det.FormulaRecID], det)
+	}
+
+	for _, header := range headers {
 		formulaLists = append(formulaLists, FormulaList{
 			Header:  header,
-			Details: formulaDetails,
+			Details: detailsMap[header.RecId],
 		})
 	}
 

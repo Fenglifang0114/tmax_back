@@ -2554,31 +2554,14 @@ func (p rawDataListedNotifier) Handle(mgr *SrvMgr) {
 	l.Log.Debug("Handle rawDataListedNotifier called")
 	recs, _ := mgr.formulaPd.GetRawDataList()
 
-	batchSize := 100 //每次发送1000条
-	numBatches := (len(recs) + batchSize - 1) / batchSize
-
-	for i := 0; i < numBatches; i++ {
-		startIndex := i * batchSize
-		endIndex := (i + 1) * batchSize
-		if endIndex > len(recs) {
-			endIndex = len(recs)
-		}
-		batchRecs := recs[startIndex:endIndex]
-
-		recStr := ""
-		var err error
-		if recStr, err = json.MarshalToString(batchRecs); err != nil {
-			mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_LIST, MsgBody: ""}
-			return
-		}
-		// 发送每一批次的数据
-		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_LIST, MsgBody: recStr}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if len(recs) == 0 {
+	recStr := ""
+	var err error
+	if recStr, err = json.MarshalToString(recs); err != nil {
+		l.Log.Error(err)
 		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_LIST, MsgBody: ""}
+		return
 	}
-
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_LIST, MsgBody: recStr}
 }
 
 // 修改原料信息
@@ -2777,29 +2760,14 @@ func (p getFormulaListNotifier) Handle(mgr *SrvMgr) {
 	// Do something for this event
 	l.Log.Debug("Handle getFormulaListNotifier called")
 	recs, _ := mgr.formulaPd.GetFormulaDataList()
-	//分批次发送
-	const batchSize = 100
-	numBatches := (len(recs) + batchSize - 1) / batchSize
-	for i := 0; i < numBatches; i++ {
-		start := i * batchSize
-		end := start + batchSize
-		if end > len(recs) {
-			end = len(recs)
-		}
-		batch := recs[start:end]
-		var typesStr string
-		var err error
-		if typesStr, err = json.MarshalToString(batch); err != nil {
-			l.Log.Error(err)
-			continue
-		}
-		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_LIST, MsgBody: typesStr}
-	}
-
-	if len(recs) == 0 {
+	var typesStr string
+	var err error
+	if typesStr, err = json.MarshalToString(recs); err != nil {
+		l.Log.Error(err)
 		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_LIST, MsgBody: ""}
+		return
 	}
-
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_LIST, MsgBody: typesStr}
 }
 
 // 获取单个配方信息
