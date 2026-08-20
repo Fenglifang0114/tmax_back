@@ -2,6 +2,7 @@ package svc
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"gorm.io/driver/sqlite"
@@ -1549,6 +1550,121 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecLists(req ReqGetFormulaRecByPage) ([]
 
 	return formulaWgtRecLists, nil
 }
+
+// 分批流式查询 FormulaWgtRecList（每批 chunkSize 条，支持通过 callback 发送进度和批次包）
+func (d *DbFormulaInfo) GetAllFormulaWgtRecListsStream(req ReqGetFormulaRecByPage, chunkSize int, sendChunk func(RespExportChunkMsg)) error {
+	if chunkSize <= 0 {
+		chunkSize = 2000
+	}
+
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	sortMap := map[string]string{
+		"orderId":           "record_id",
+		"fmaId":             "formula_id",
+		"fmaName":           "formula_name",
+		"barcode":           "formula_barcode",
+		"fmaTotalWeight":    "total_weight",
+		"actualTotalWeight": "actual_total_weight",
+	}
+
+	dbColumn, exists := sortMap[req.SortColumn]
+	if !exists {
+		dbColumn = "rec_id"
+	}
+
+	orderClause := dbColumn
+	if req.SortAsc {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query := db.Model(&FormulaWgtRecHeader{})
+
+	if req.SearchText != "" {
+		kw := "%" + req.SearchText + "%"
+		query = query.Where("record_id LIKE ? OR formula_id LIKE ? OR formula_name LIKE ? OR formula_barcode LIKE ?", kw, kw, kw, kw)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		return err
+	}
+
+	if totalCount == 0 {
+		sendChunk(RespExportChunkMsg{
+			ChunkIndex: 0,
+			TotalChunk: 0,
+			TotalCount: 0,
+			IsFirst:    true,
+			IsLast:     true,
+			List:       []FormulaWgtRecList{},
+		})
+		return nil
+	}
+
+	totalChunk := int(math.Ceil(float64(totalCount) / float64(chunkSize)))
+
+	for i := 0; i < totalChunk; i++ {
+		offset := i * chunkSize
+
+		var headers []FormulaWgtRecHeader
+		err = query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&headers).Error
+		if err != nil {
+			return err
+		}
+
+		var chunkLists []FormulaWgtRecList
+		if len(headers) > 0 {
+			var recordIDs []string
+			for _, h := range headers {
+				if h.RecordID != "" {
+					recordIDs = append(recordIDs, h.RecordID)
+				}
+			}
+
+			var details []FormulaWgtRecDetail
+			if len(recordIDs) > 0 {
+				db.Where("record_id IN (?)", recordIDs).Order("sequence ASC").Find(&details)
+			}
+
+			detailsMap := make(map[string][]FormulaWgtRecDetail)
+			for _, det := range details {
+				detailsMap[det.RecordID] = append(detailsMap[det.RecordID], det)
+			}
+
+			for _, h := range headers {
+				chunkLists = append(chunkLists, FormulaWgtRecList{
+					Header:  h,
+					Details: detailsMap[h.RecordID],
+				})
+			}
+		}
+
+		sendChunk(RespExportChunkMsg{
+			ChunkIndex: i,
+			TotalChunk: totalChunk,
+			TotalCount: totalCount,
+			IsFirst:    i == 0,
+			IsLast:     i == totalChunk-1,
+			List:       chunkLists,
+		})
+	}
+
+	return nil
+}
+
 
 // 分页与全局排序查询 FormulaWgtRecList
 func (d *DbFormulaInfo) GetFormulaWgtRecByPage(req ReqGetFormulaRecByPage) (*RespFormulaRecByPage, error) {

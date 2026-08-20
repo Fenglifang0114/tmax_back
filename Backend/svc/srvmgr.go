@@ -3221,22 +3221,23 @@ func (p getFormulaWgtRecByPageNotifier) Handle(mgr *SrvMgr, payload ReqGetFormul
 	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_REC_BY_PAGE, MsgBody: respStr}
 }
 
-// 导出获取全库所有配方称重记录列表
+// 导出获取全库所有配方称重记录列表（分批流式推送）
 func (p getAllFormulaRecForExportNotifier) Handle(mgr *SrvMgr, payload ReqGetFormulaRecByPage) {
-	l.Log.Debug("Handle getAllFormulaRecForExportNotifier called")
-	recs, err := mgr.formulaPd.infoPb.GetAllFormulaWgtRecLists(payload)
+	l.Log.Debug("Handle getAllFormulaRecForExportNotifier stream called")
+	err := mgr.formulaPd.infoPb.GetAllFormulaWgtRecListsStream(payload, 2000, func(chunk RespExportChunkMsg) {
+		respStr, err := json.MarshalToString(chunk)
+		if err != nil {
+			l.Log.Error(err)
+			return
+		}
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{
+			MsgType: SCALE_MGR_RESP_ALL_FORMULA_REC_FOR_EXPORT,
+			MsgBody: respStr,
+		}
+	})
 	if err != nil {
 		l.Log.Error(err)
-		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_ALL_FORMULA_REC_FOR_EXPORT, MsgBody: ""}
-		return
 	}
-	respStr, err := json.MarshalToString(recs)
-	if err != nil {
-		l.Log.Error(err)
-		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_ALL_FORMULA_REC_FOR_EXPORT, MsgBody: ""}
-		return
-	}
-	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_ALL_FORMULA_REC_FOR_EXPORT, MsgBody: respStr}
 }
 
 

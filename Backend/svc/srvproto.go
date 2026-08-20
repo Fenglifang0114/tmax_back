@@ -200,6 +200,17 @@ type ReqDelScale struct {
 	ScaleId int64
 }
 
+// 导出批次数据包结构
+type RespExportChunkMsg struct {
+	ChunkIndex int                 `json:"chunkIndex"` // 当前批次序号 (0, 1, 2...)
+	TotalChunk int                 `json:"totalChunk"` // 总批次数
+	TotalCount int64               `json:"totalCount"` // 符合条件的总记录数
+	IsFirst    bool                `json:"isFirst"`    // 是否为首批
+	IsLast     bool                `json:"isLast"`     // 是否为最后一批
+	List       []FormulaWgtRecList `json:"list"`       // 本批次记录
+}
+
+
 type ReqModifyScale struct {
 	ScaleId int64
 	// MediaType MediaType
