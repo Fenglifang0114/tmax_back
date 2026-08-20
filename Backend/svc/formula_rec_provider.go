@@ -194,6 +194,11 @@ func (p *FormulaRecProvider) GetFmaWgtRecByOrderId(orderId string) (FormulaWgtRe
 	return p.infoPb.GetFmaWgtRecByOrderId(orderId)
 }
 
+// 根据RecordID删除配方称重记录
+func (p *FormulaRecProvider) DeleteFormulaWgtRecByRecordID(recordID string) error {
+	return p.infoPb.DeleteFormulaWgtRecByRecordID(recordID)
+}
+
 // 删除配方
 func (p *FormulaRecProvider) DeleteFormula(rec_id int) error {
 	return p.infoPb.DeleteFormulaByRecId(rec_id)

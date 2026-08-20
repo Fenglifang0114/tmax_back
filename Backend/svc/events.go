@@ -1363,6 +1363,27 @@ func (u FormulaWgtRecListed) Trigger(payload *SrvMgr) {
 	}
 }
 
+// 批量删除配方称重记录
+var delFormulaWgtRecBatch DelFormulaWgtRecBatch
+
+type DelFormulaWgtRecBatch struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr, payload ReqDelFormulaWgtRecBatch)
+	}
+}
+
+func (u *DelFormulaWgtRecBatch) Register(handler interface {
+	Handle(srvMgr *SrvMgr, payload ReqDelFormulaWgtRecBatch)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u DelFormulaWgtRecBatch) Trigger(mgr *SrvMgr, payload ReqDelFormulaWgtRecBatch) {
+	for _, handler := range u.handlers {
+		go handler.Handle(mgr, payload)
+	}
+}
+
 // 根据RecId删除配方
 var formulaDeleted FormulaDeleted
 

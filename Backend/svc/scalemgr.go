@@ -256,6 +256,9 @@ func init() {
 	oneFormulaWgtRecListNotifier := getOneFormulaWgtRecListNotifier{}
 	oneFmaWgtRecList.Register(oneFormulaWgtRecListNotifier)
 
+	createDelFormulaWgtRecBatchNotifier := delFormulaWgtRecBatchNotifier{}
+	delFormulaWgtRecBatch.Register(createDelFormulaWgtRecBatchNotifier)
+
 	getFmaRecByOrderIdNotifier := getFmaRecByOrderIdNotifier{}
 	getFmaRecByOrderId.Register(getFmaRecByOrderIdNotifier)
 
@@ -560,6 +563,8 @@ type addFormulaWgtRecNotifier struct{}
 type getFormulaWgtRecListNotifier struct{}
 
 type getOneFormulaWgtRecListNotifier struct{}
+
+type delFormulaWgtRecBatchNotifier struct{}
 
 type getFmaRecByOrderIdNotifier struct{}
 

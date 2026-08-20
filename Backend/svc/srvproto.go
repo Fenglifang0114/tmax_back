@@ -105,6 +105,7 @@ const (
 	REQ_ADD_FORMULA_REC          ReqType = "add_formula_rec"          //新增配方称重记录
 	REQ_GET_FORMULA_REC_LIST     ReqType = "get_formula_rec_list"     //获取配方称重记录列表
 	REQ_GET_ONE_FORMULA_REC_LIST ReqType = "get_fma_rec_by_id"        //获取配方称重记录列表
+	REQ_DEL_FORMULA_WGT_REC_BATCH ReqType = "del_formula_wgt_rec_batch" //批量删除配方称重记录
 	REQ_GET_FMA_REC_BY_ORDER     ReqType = "get_fma_rec_by_order"     //根据订单号获取配方称重记录
 	REQ_ADD_FLOW_RATE            ReqType = "add_flow_rate"            //新增流速
 	REQ_GET_FLOW_RATE_LIST       ReqType = "get_flow_rate_list"       //获取流速列表
@@ -927,6 +928,7 @@ const (
 	SCALE_MGR_RESP_FORMULA_REC_ADD               ScaleMgrRespMsgType = "resp_formula_rec_add"
 	SCALE_MGR_RESP_FORMULA_REC_LIST              ScaleMgrRespMsgType = "resp_formula_rec_list"
 	SCALE_MGR_RESP_ONE_FORMULA_REC_LIST          ScaleMgrRespMsgType = "resp_one_fma_rec_list"
+	SCALE_MGR_RESP_DEL_FORMULA_WGT_REC_BATCH     ScaleMgrRespMsgType = "resp_del_formula_wgt_rec_batch"
 	SCALE_MGR_RESP_FORMULA_REC_BY_ORDER          ScaleMgrRespMsgType = "resp_formula_rec_by_order"
 	SCALE_MGR_RESP_FORMULA_DELETE                ScaleMgrRespMsgType = "resp_formula_delete"
 	SCALE_MGR_RESP_MANY_FMA_DELETE               ScaleMgrRespMsgType = "resp_many_fma_del"
@@ -1295,4 +1297,8 @@ type RespRecs struct {
 type CodeMsg struct {
 	IsStable bool
 	CodeVal  int64
+}
+
+type ReqDelFormulaWgtRecBatch struct {
+	RecordIDs []string `json:"recordIds"`
 }

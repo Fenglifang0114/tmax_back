@@ -328,6 +328,19 @@ func NewFormulaInfo(dbName string) (*DbFormulaInfo, error) {
 		return nil, err
 	}
 
+	// 启用 WAL 模式与高性能 PRAGMA 缓存
+	db.Exec("PRAGMA journal_mode = WAL;")
+	db.Exec("PRAGMA cache_size = -64000;")
+	db.Exec("PRAGMA synchronous = NORMAL;")
+	db.Exec("PRAGMA temp_store = MEMORY;")
+
+	// 创建高性能非破坏性索引
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_formula_header_search ON formula_headers(is_used, is_latest, category_id, is_encrypted);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_formula_detail_header ON formula_details(formula_rec_id);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_raw_material_search ON raw_materials(category_id, material_id);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_wgt_rec_header_search ON formula_wgt_rec_headers(record_id, formula_id, created_at);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_wgt_rec_detail_search ON formula_wgt_rec_details(record_id);")
+
 	// 检查并更新现有数据
 	db.Exec("UPDATE formula_headers SET formula_key = rec_id WHERE formula_key = 0")
 	db.Exec("UPDATE formula_headers SET formula_barcode = formula_id WHERE formula_barcode IS NULL OR formula_barcode = ''")
@@ -1473,20 +1486,36 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecLists() ([]FormulaWgtRecList, error) 
 	}
 
 	var headers []FormulaWgtRecHeader
-	err = db.Find(&headers).Error
+	err = db.Order("rec_id DESC").Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
 
-	for _, header := range headers {
-		var details []FormulaWgtRecDetail
-		err = db.Where("record_id = ?", header.RecordID).Find(&details).Error
-		if err != nil {
-			return nil, err
+	if len(headers) == 0 {
+		return formulaWgtRecLists, nil
+	}
+
+	var recordIDs []string
+	for _, h := range headers {
+		if h.RecordID != "" {
+			recordIDs = append(recordIDs, h.RecordID)
 		}
+	}
+
+	var allDetails []FormulaWgtRecDetail
+	if len(recordIDs) > 0 {
+		db.Where("record_id IN (?)", recordIDs).Order("sequence ASC").Find(&allDetails)
+	}
+
+	detailsMap := make(map[string][]FormulaWgtRecDetail)
+	for _, det := range allDetails {
+		detailsMap[det.RecordID] = append(detailsMap[det.RecordID], det)
+	}
+
+	for _, header := range headers {
 		formulaWgtRecLists = append(formulaWgtRecLists, FormulaWgtRecList{
 			Header:  header,
-			Details: details,
+			Details: detailsMap[header.RecordID],
 		})
 	}
 

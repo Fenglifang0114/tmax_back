@@ -1000,6 +1000,14 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 	case REQ_GET_ONE_FORMULA_REC_LIST:
 		jsonStr := req.ReqData
 		oneFmaWgtRecList.Trigger(scaleMgr.srvMgr, jsonStr)
+	case REQ_DEL_FORMULA_WGT_REC_BATCH:
+		jsonStr := req.ReqData
+		var data ReqDelFormulaWgtRecBatch
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			delFormulaWgtRecBatch.Trigger(scaleMgr.srvMgr, data)
+		}
 	case REQ_GET_FMA_REC_BY_ORDER:
 		jsonStr := req.ReqData
 		getFmaRecByOrderId.Trigger(scaleMgr.srvMgr, jsonStr)
@@ -3200,7 +3208,26 @@ func (p getOneFormulaWgtRecListNotifier) Handle(mgr *SrvMgr, payload string) {
 	if len(recs) == 0 {
 		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_ONE_FORMULA_REC_LIST, MsgBody: ""}
 	}
+}
 
+// 批量删除配方称重记录
+func (p delFormulaWgtRecBatchNotifier) Handle(mgr *SrvMgr, payload ReqDelFormulaWgtRecBatch) {
+	l.Log.Debug("Handle delFormulaWgtRecBatchNotifier called")
+	var deletedIDs []string
+	for _, recID := range payload.RecordIDs {
+		if recID != "" {
+			if err := mgr.formulaPd.DeleteFormulaWgtRecByRecordID(recID); err == nil {
+				deletedIDs = append(deletedIDs, recID)
+			} else {
+				l.Log.Error(err)
+			}
+		}
+	}
+	respJson, _ := json.MarshalToString(deletedIDs)
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{
+		MsgType: SCALE_MGR_RESP_DEL_FORMULA_WGT_REC_BATCH,
+		MsgBody: respJson,
+	}
 }
 
 // 删除配方
