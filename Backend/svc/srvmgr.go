@@ -995,7 +995,26 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 		//获取配方称重记录
 	case REQ_GET_FORMULA_REC_LIST:
 		formulaWgtRecList.Trigger(scaleMgr.srvMgr)
+	case REQ_GET_FORMULA_REC_BY_PAGE:
+		jsonStr := req.ReqData
+		var data ReqGetFormulaRecByPage
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			formulaWgtRecByPage.Trigger(scaleMgr.srvMgr, data)
+		}
+	case REQ_GET_ALL_FORMULA_REC_FOR_EXPORT:
+		jsonStr := req.ReqData
+		var data ReqGetFormulaRecByPage
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+			getAllFormulaRecForExport.Trigger(scaleMgr.srvMgr, ReqGetFormulaRecByPage{})
+		} else {
+			getAllFormulaRecForExport.Trigger(scaleMgr.srvMgr, data)
+		}
+
 		//根据订单号获取配方称重记录
+
 
 	case REQ_GET_ONE_FORMULA_REC_LIST:
 		jsonStr := req.ReqData
@@ -1008,6 +1027,9 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 		} else {
 			delFormulaWgtRecBatch.Trigger(scaleMgr.srvMgr, data)
 		}
+	case REQ_DEL_ALL_FORMULA_WGT_REC:
+		delAllFormulaWgtRec.Trigger(scaleMgr.srvMgr)
+
 	case REQ_GET_FMA_REC_BY_ORDER:
 		jsonStr := req.ReqData
 		getFmaRecByOrderId.Trigger(scaleMgr.srvMgr, jsonStr)
@@ -3181,6 +3203,44 @@ func (p getFormulaWgtRecListNotifier) Handle(mgr *SrvMgr) {
 
 }
 
+// 分页与全局排序获取配方称重记录
+func (p getFormulaWgtRecByPageNotifier) Handle(mgr *SrvMgr, payload ReqGetFormulaRecByPage) {
+	l.Log.Debug("Handle getFormulaWgtRecByPageNotifier called")
+	resp, err := mgr.formulaPd.GetFormulaWgtRecByPage(payload)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_REC_BY_PAGE, MsgBody: ""}
+		return
+	}
+	respStr, err := json.MarshalToString(resp)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_REC_BY_PAGE, MsgBody: ""}
+		return
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_REC_BY_PAGE, MsgBody: respStr}
+}
+
+// 导出获取全库所有配方称重记录列表
+func (p getAllFormulaRecForExportNotifier) Handle(mgr *SrvMgr, payload ReqGetFormulaRecByPage) {
+	l.Log.Debug("Handle getAllFormulaRecForExportNotifier called")
+	recs, err := mgr.formulaPd.infoPb.GetAllFormulaWgtRecLists(payload)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_ALL_FORMULA_REC_FOR_EXPORT, MsgBody: ""}
+		return
+	}
+	respStr, err := json.MarshalToString(recs)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_ALL_FORMULA_REC_FOR_EXPORT, MsgBody: ""}
+		return
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_ALL_FORMULA_REC_FOR_EXPORT, MsgBody: respStr}
+}
+
+
+
 // 根据配方ID获取配方称重记录
 func (p getOneFormulaWgtRecListNotifier) Handle(mgr *SrvMgr, payload string) {
 	// Do something for this event
@@ -3229,6 +3289,24 @@ func (p delFormulaWgtRecBatchNotifier) Handle(mgr *SrvMgr, payload ReqDelFormula
 		MsgBody: respJson,
 	}
 }
+
+// 清空全库配方称重记录
+func (p delAllFormulaWgtRecNotifier) Handle(mgr *SrvMgr) {
+	l.Log.Debug("Handle delAllFormulaWgtRecNotifier called")
+	err := mgr.formulaPd.DeleteAllFormulaWgtRec()
+	var respMsg string
+	if err != nil {
+		l.Log.Error(err)
+		respMsg = "fail"
+	} else {
+		respMsg = "success"
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{
+		MsgType: SCALE_MGR_RESP_DEL_ALL_FORMULA_WGT_REC,
+		MsgBody: respMsg,
+	}
+}
+
 
 // 删除配方
 func (p delFormulaNotifier) Handle(mgr *SrvMgr, payload ReqDelFmaData) {

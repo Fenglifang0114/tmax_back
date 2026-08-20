@@ -253,11 +253,23 @@ func init() {
 	createFormulaWgtRecListNotifier := getFormulaWgtRecListNotifier{}
 	formulaWgtRecList.Register(createFormulaWgtRecListNotifier)
 
+	createGetFormulaWgtRecByPageNotifier := getFormulaWgtRecByPageNotifier{}
+	formulaWgtRecByPage.Register(createGetFormulaWgtRecByPageNotifier)
+
+	createGetAllFormulaRecForExportNotifier := getAllFormulaRecForExportNotifier{}
+	getAllFormulaRecForExport.Register(createGetAllFormulaRecForExportNotifier)
+
+
+
 	oneFormulaWgtRecListNotifier := getOneFormulaWgtRecListNotifier{}
 	oneFmaWgtRecList.Register(oneFormulaWgtRecListNotifier)
 
 	createDelFormulaWgtRecBatchNotifier := delFormulaWgtRecBatchNotifier{}
 	delFormulaWgtRecBatch.Register(createDelFormulaWgtRecBatchNotifier)
+
+	createDelAllFormulaWgtRecNotifier := delAllFormulaWgtRecNotifier{}
+	delAllFormulaWgtRec.Register(createDelAllFormulaWgtRecNotifier)
+
 
 	getFmaRecByOrderIdNotifier := getFmaRecByOrderIdNotifier{}
 	getFmaRecByOrderId.Register(getFmaRecByOrderIdNotifier)
@@ -562,9 +574,18 @@ type addFormulaWgtRecNotifier struct{}
 
 type getFormulaWgtRecListNotifier struct{}
 
+type getFormulaWgtRecByPageNotifier struct{}
+
+type getAllFormulaRecForExportNotifier struct{}
+
+
+
 type getOneFormulaWgtRecListNotifier struct{}
 
 type delFormulaWgtRecBatchNotifier struct{}
+
+type delAllFormulaWgtRecNotifier struct{}
+
 
 type getFmaRecByOrderIdNotifier struct{}
 

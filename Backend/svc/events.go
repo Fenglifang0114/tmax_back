@@ -1363,6 +1363,46 @@ func (u FormulaWgtRecListed) Trigger(payload *SrvMgr) {
 	}
 }
 
+// 分页与全局排序获取配方称重记录列表
+var formulaWgtRecByPage FormulaWgtRecByPageListed
+
+type FormulaWgtRecByPageListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr, payload ReqGetFormulaRecByPage)
+	}
+}
+
+func (u *FormulaWgtRecByPageListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr, payload ReqGetFormulaRecByPage)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u FormulaWgtRecByPageListed) Trigger(srvMgr *SrvMgr, payload ReqGetFormulaRecByPage) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr, payload)
+	}
+}
+
+// 导出获取所有配方称重记录列表
+var getAllFormulaRecForExport GetAllFormulaRecForExportListed
+
+type GetAllFormulaRecForExportListed struct {
+	handlers []interface{ Handle(srvMgr *SrvMgr, payload ReqGetFormulaRecByPage) }
+}
+
+func (u *GetAllFormulaRecForExportListed) Register(handler interface{ Handle(srvMgr *SrvMgr, payload ReqGetFormulaRecByPage) }) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u GetAllFormulaRecForExportListed) Trigger(srvMgr *SrvMgr, payload ReqGetFormulaRecByPage) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr, payload)
+	}
+}
+
+
+
 // 批量删除配方称重记录
 var delFormulaWgtRecBatch DelFormulaWgtRecBatch
 
@@ -1383,6 +1423,28 @@ func (u DelFormulaWgtRecBatch) Trigger(mgr *SrvMgr, payload ReqDelFormulaWgtRecB
 		go handler.Handle(mgr, payload)
 	}
 }
+
+// 清空所有配方称重记录
+var delAllFormulaWgtRec DelAllFormulaWgtRecListed
+
+type DelAllFormulaWgtRecListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr)
+	}
+}
+
+func (u *DelAllFormulaWgtRecListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u DelAllFormulaWgtRecListed) Trigger(mgr *SrvMgr) {
+	for _, handler := range u.handlers {
+		go handler.Handle(mgr)
+	}
+}
+
 
 // 根据RecId删除配方
 var formulaDeleted FormulaDeleted

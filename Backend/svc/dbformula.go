@@ -1470,8 +1470,8 @@ func (d *DbFormulaInfo) GetOneFormulaWgtRecLists(fmaId string) ([]FormulaWgtRecL
 	return formulaWgtRecLists, nil
 }
 
-// 查询所有的 FormulaWgtRecList
-func (d *DbFormulaInfo) GetAllFormulaWgtRecLists() ([]FormulaWgtRecList, error) {
+// 查询所有的 FormulaWgtRecList（支持带入前端当前的搜索过滤和全局排序条件）
+func (d *DbFormulaInfo) GetAllFormulaWgtRecLists(req ReqGetFormulaRecByPage) ([]FormulaWgtRecList, error) {
 	var formulaWgtRecLists []FormulaWgtRecList
 	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
 	if err != nil {
@@ -1485,8 +1485,36 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecLists() ([]FormulaWgtRecList, error) 
 		defer sqlDB.Close()
 	}
 
+	sortMap := map[string]string{
+		"orderId":           "record_id",
+		"fmaId":             "formula_id",
+		"fmaName":           "formula_name",
+		"barcode":           "formula_barcode",
+		"fmaTotalWeight":    "total_weight",
+		"actualTotalWeight": "actual_total_weight",
+	}
+
+	dbColumn, exists := sortMap[req.SortColumn]
+	if !exists {
+		dbColumn = "rec_id"
+	}
+
+	orderClause := dbColumn
+	if req.SortAsc {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query := db.Model(&FormulaWgtRecHeader{})
+
+	if req.SearchText != "" {
+		kw := "%" + req.SearchText + "%"
+		query = query.Where("record_id LIKE ? OR formula_id LIKE ? OR formula_name LIKE ? OR formula_barcode LIKE ?", kw, kw, kw, kw)
+	}
+
 	var headers []FormulaWgtRecHeader
-	err = db.Order("rec_id DESC").Find(&headers).Error
+	err = query.Order(orderClause).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
@@ -1521,6 +1549,102 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecLists() ([]FormulaWgtRecList, error) 
 
 	return formulaWgtRecLists, nil
 }
+
+// 分页与全局排序查询 FormulaWgtRecList
+func (d *DbFormulaInfo) GetFormulaWgtRecByPage(req ReqGetFormulaRecByPage) (*RespFormulaRecByPage, error) {
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	sortMap := map[string]string{
+		"orderId":           "record_id",
+		"fmaId":             "formula_id",
+		"fmaName":           "formula_name",
+		"barcode":           "formula_barcode",
+		"fmaTotalWeight":    "total_weight",
+		"actualTotalWeight": "actual_total_weight",
+	}
+
+	dbColumn, exists := sortMap[req.SortColumn]
+	if !exists {
+		dbColumn = "rec_id"
+	}
+
+	orderClause := dbColumn
+	if req.SortAsc {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query := db.Model(&FormulaWgtRecHeader{})
+
+	if req.SearchText != "" {
+		kw := "%" + req.SearchText + "%"
+		query = query.Where("record_id LIKE ? OR formula_id LIKE ? OR formula_name LIKE ? OR formula_barcode LIKE ?", kw, kw, kw, kw)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	page := req.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := req.PageSize
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	var headers []FormulaWgtRecHeader
+	err = query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&headers).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var recLists []FormulaWgtRecList
+	if len(headers) > 0 {
+		var recordIDs []string
+		for _, h := range headers {
+			if h.RecordID != "" {
+				recordIDs = append(recordIDs, h.RecordID)
+			}
+		}
+
+		var details []FormulaWgtRecDetail
+		if len(recordIDs) > 0 {
+			db.Where("record_id IN (?)", recordIDs).Order("sequence ASC").Find(&details)
+		}
+
+		detailsMap := make(map[string][]FormulaWgtRecDetail)
+		for _, det := range details {
+			detailsMap[det.RecordID] = append(detailsMap[det.RecordID], det)
+		}
+
+		for _, h := range headers {
+			recLists = append(recLists, FormulaWgtRecList{
+				Header:  h,
+				Details: detailsMap[h.RecordID],
+			})
+		}
+	}
+
+	return &RespFormulaRecByPage{
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+		List:     recLists,
+	}, nil
+}
+
 
 // 新增配方称重记录头
 func (d *DbFormulaInfo) CreateFormulaWgtRecHeader(header FormulaWgtRecHeader) error {
@@ -1783,6 +1907,36 @@ func (d *DbFormulaInfo) DeleteFormulaWgtRecByRecordID(recordID string) error {
 	// 提交事务
 	return tx.Commit().Error
 }
+
+// 清空全库配方称重记录（包括头表和明细表）
+func (d *DbFormulaInfo) DeleteAllFormulaWgtRec() error {
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	tx := db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	if err := tx.Where("1 = 1").Delete(&FormulaWgtRecDetail{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Where("1 = 1").Delete(&FormulaWgtRecHeader{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
+}
+
 
 // 根据recId将配方标记为未使用
 func (d *DbFormulaInfo) DeleteFormulaByRecId(recId int) error {

@@ -104,8 +104,11 @@ const (
 	REQ_DEL_MANY_DRAFT_FMA       ReqType = "del_many_draft_fma"       //删除所有暂存配方
 	REQ_ADD_FORMULA_REC          ReqType = "add_formula_rec"          //新增配方称重记录
 	REQ_GET_FORMULA_REC_LIST     ReqType = "get_formula_rec_list"     //获取配方称重记录列表
+	REQ_GET_FORMULA_REC_BY_PAGE           ReqType = "get_formula_rec_by_page"           //分页与全局排序获取配方称重记录列表
+	REQ_GET_ALL_FORMULA_REC_FOR_EXPORT    ReqType = "get_all_formula_rec_for_export"    //导出获取所有配方称重记录列表
 	REQ_GET_ONE_FORMULA_REC_LIST ReqType = "get_fma_rec_by_id"        //获取配方称重记录列表
 	REQ_DEL_FORMULA_WGT_REC_BATCH ReqType = "del_formula_wgt_rec_batch" //批量删除配方称重记录
+	REQ_DEL_ALL_FORMULA_WGT_REC   ReqType = "del_all_formula_wgt_rec"   //清空所有配方称重记录
 	REQ_GET_FMA_REC_BY_ORDER     ReqType = "get_fma_rec_by_order"     //根据订单号获取配方称重记录
 	REQ_ADD_FLOW_RATE            ReqType = "add_flow_rate"            //新增流速
 	REQ_GET_FLOW_RATE_LIST       ReqType = "get_flow_rate_list"       //获取流速列表
@@ -927,8 +930,11 @@ const (
 	SCALE_MGR_RESP_RAW                           ScaleMgrRespMsgType = "resp_raw_data"
 	SCALE_MGR_RESP_FORMULA_REC_ADD               ScaleMgrRespMsgType = "resp_formula_rec_add"
 	SCALE_MGR_RESP_FORMULA_REC_LIST              ScaleMgrRespMsgType = "resp_formula_rec_list"
+	SCALE_MGR_RESP_FORMULA_REC_BY_PAGE           ScaleMgrRespMsgType = "resp_formula_rec_by_page"
+	SCALE_MGR_RESP_ALL_FORMULA_REC_FOR_EXPORT    ScaleMgrRespMsgType = "resp_all_formula_rec_for_export"
 	SCALE_MGR_RESP_ONE_FORMULA_REC_LIST          ScaleMgrRespMsgType = "resp_one_fma_rec_list"
 	SCALE_MGR_RESP_DEL_FORMULA_WGT_REC_BATCH     ScaleMgrRespMsgType = "resp_del_formula_wgt_rec_batch"
+	SCALE_MGR_RESP_DEL_ALL_FORMULA_WGT_REC ScaleMgrRespMsgType = "resp_del_all_formula_wgt_rec"
 	SCALE_MGR_RESP_FORMULA_REC_BY_ORDER          ScaleMgrRespMsgType = "resp_formula_rec_by_order"
 	SCALE_MGR_RESP_FORMULA_DELETE                ScaleMgrRespMsgType = "resp_formula_delete"
 	SCALE_MGR_RESP_MANY_FMA_DELETE               ScaleMgrRespMsgType = "resp_many_fma_del"
@@ -1302,3 +1308,19 @@ type CodeMsg struct {
 type ReqDelFormulaWgtRecBatch struct {
 	RecordIDs []string `json:"recordIds"`
 }
+
+type ReqGetFormulaRecByPage struct {
+	Page       int    `json:"page"`
+	PageSize   int    `json:"pageSize"`
+	SearchText string `json:"searchText"`
+	SortColumn string `json:"sortColumn"`
+	SortAsc    bool   `json:"sortAsc"`
+}
+
+type RespFormulaRecByPage struct {
+	Total    int64                `json:"total"`
+	Page     int                  `json:"page"`
+	PageSize int                  `json:"pageSize"`
+	List     []FormulaWgtRecList `json:"list"`
+}
+

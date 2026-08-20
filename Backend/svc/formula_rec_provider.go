@@ -24,7 +24,7 @@ func (p *FormulaRecProvider) GetFormulaRecsList() ([]FormulaList, error) {
 
 // 获取所有重量模式配方记录列表
 func (p *FormulaRecProvider) GetPluPath() ([]FormulaWgtRecList, error) {
-	recs, err := p.infoPb.GetAllFormulaWgtRecLists()
+	recs, err := p.infoPb.GetAllFormulaWgtRecLists(ReqGetFormulaRecByPage{})
 	return recs, err
 }
 
@@ -179,9 +179,15 @@ func (p *FormulaRecProvider) InsertFormulaWgtBody(rec FormulaWgtRecDetail) error
 
 // 获取配方称重记录列表
 func (p *FormulaRecProvider) GetFormulaWgtRecList() ([]FormulaWgtRecList, error) {
-	recs, err := p.infoPb.GetAllFormulaWgtRecLists()
+	recs, err := p.infoPb.GetAllFormulaWgtRecLists(ReqGetFormulaRecByPage{})
 	return recs, err
 }
+
+// 分页与全局排序获取配方称重记录列表
+func (p *FormulaRecProvider) GetFormulaWgtRecByPage(req ReqGetFormulaRecByPage) (*RespFormulaRecByPage, error) {
+	return p.infoPb.GetFormulaWgtRecByPage(req)
+}
+
 
 // 获取配方称重记录列表
 func (p *FormulaRecProvider) GetOneFormulaWgtRecList(fmaId string) ([]FormulaWgtRecList, error) {
@@ -198,6 +204,12 @@ func (p *FormulaRecProvider) GetFmaWgtRecByOrderId(orderId string) (FormulaWgtRe
 func (p *FormulaRecProvider) DeleteFormulaWgtRecByRecordID(recordID string) error {
 	return p.infoPb.DeleteFormulaWgtRecByRecordID(recordID)
 }
+
+// 清空所有配方称重记录
+func (p *FormulaRecProvider) DeleteAllFormulaWgtRec() error {
+	return p.infoPb.DeleteAllFormulaWgtRec()
+}
+
 
 // 删除配方
 func (p *FormulaRecProvider) DeleteFormula(rec_id int) error {
