@@ -3486,25 +3486,44 @@ func (p getOneFormulaWgtRecListNotifier) Handle(mgr *SrvMgr, payload string) {
 func (p delFormulaWgtRecBatchNotifier) Handle(mgr *SrvMgr, payload ReqDelFormulaWgtRecBatch) {
 	l.Log.Debug("Handle delFormulaWgtRecBatchNotifier called")
 	var deletedIDs []string
-	for _, recID := range payload.RecordIDs {
-		if recID != "" {
-			if err := mgr.formulaPd.DeleteFormulaWgtRecByRecordID(recID); err == nil {
-				deletedIDs = append(deletedIDs, recID)
-			} else {
-				l.Log.Error(err)
+	var deletedHeaders []FormulaWgtRecHeader
+
+	if len(payload.RecordIDs) > 0 {
+		headers, _ := mgr.formulaPd.GetFormulaWgtRecHeadersByRecordIDs(payload.RecordIDs)
+		headerMap := make(map[string]FormulaWgtRecHeader)
+		for _, h := range headers {
+			headerMap[h.RecordID] = h
+		}
+
+		for _, recID := range payload.RecordIDs {
+			if recID != "" {
+				if err := mgr.formulaPd.DeleteFormulaWgtRecByRecordID(recID); err == nil {
+					deletedIDs = append(deletedIDs, recID)
+					if h, ok := headerMap[recID]; ok {
+						deletedHeaders = append(deletedHeaders, h)
+					}
+				} else {
+					l.Log.Error(err)
+				}
 			}
 		}
 	}
+
 	respJson, _ := json.MarshalToString(deletedIDs)
 	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{
 		MsgType: SCALE_MGR_RESP_DEL_FORMULA_WGT_REC_BATCH,
 		MsgBody: respJson,
+	}
+
+	if len(deletedHeaders) > 0 {
+		SaveDeleteFmaWgtRecBatchLog(deletedHeaders)
 	}
 }
 
 // 清空全库配方称重记录
 func (p delAllFormulaWgtRecNotifier) Handle(mgr *SrvMgr) {
 	l.Log.Debug("Handle delAllFormulaWgtRecNotifier called")
+	totalCount, _ := mgr.formulaPd.GetFormulaWgtRecCount()
 	err := mgr.formulaPd.DeleteAllFormulaWgtRec()
 	var respMsg string
 	if err != nil {
@@ -3512,6 +3531,7 @@ func (p delAllFormulaWgtRecNotifier) Handle(mgr *SrvMgr) {
 		respMsg = "fail"
 	} else {
 		respMsg = "success"
+		SaveClearAllFmaWgtRecLog(totalCount)
 	}
 	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{
 		MsgType: SCALE_MGR_RESP_DEL_ALL_FORMULA_WGT_REC,

@@ -210,6 +210,16 @@ func (p *FormulaRecProvider) DeleteAllFormulaWgtRec() error {
 	return p.infoPb.DeleteAllFormulaWgtRec()
 }
 
+// 批量获取配方称重头记录
+func (p *FormulaRecProvider) GetFormulaWgtRecHeadersByRecordIDs(recordIDs []string) ([]FormulaWgtRecHeader, error) {
+	return p.infoPb.GetFormulaWgtRecHeadersByRecordIDs(recordIDs)
+}
+
+// 获取全库配方称重记录总数
+func (p *FormulaRecProvider) GetFormulaWgtRecCount() (int64, error) {
+	return p.infoPb.GetFormulaWgtRecCount()
+}
+
 
 // 删除配方
 func (p *FormulaRecProvider) DeleteFormula(rec_id int) error {

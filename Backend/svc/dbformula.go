@@ -2465,6 +2465,41 @@ func (d *DbFormulaInfo) DeleteAllFormulaWgtRec() error {
 	return tx.Commit().Error
 }
 
+// 根据 RecordIDs 批量查询配方称重记录头表
+func (d *DbFormulaInfo) GetFormulaWgtRecHeadersByRecordIDs(recordIDs []string) ([]FormulaWgtRecHeader, error) {
+	var headers []FormulaWgtRecHeader
+	if len(recordIDs) == 0 {
+		return headers, nil
+	}
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	err = db.Where("record_id IN (?)", recordIDs).Find(&headers).Error
+	return headers, err
+}
+
+// 获取全库配方称重记录总数
+func (d *DbFormulaInfo) GetFormulaWgtRecCount() (int64, error) {
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return 0, err
+	}
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	var count int64
+	err = db.Model(&FormulaWgtRecHeader{}).Count(&count).Error
+	return count, err
+}
+
 
 // 根据recId将配方标记为未使用
 func (d *DbFormulaInfo) DeleteFormulaByRecId(recId int) error {

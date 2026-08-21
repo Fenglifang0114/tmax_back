@@ -455,3 +455,61 @@ func UploadFmaWgtRecCsvLog(ip string, shareName string, res string) {
 	jsonStr, _ := json.MarshalToString(record)
 	LogSysOperation(MenuFormulaManage, SubFmaWgtRecUpload, OpUploadStr, jsonStr, "", "")
 }
+
+// 配方称重记录删除日志结构体
+type SaveDelFmaWgtRecLogData struct {
+	RecordID          string  `json:"recordId"`
+	FormulaID         string  `json:"formulaId"`
+	FormulaName       string  `json:"formulaName"`
+	FormulaBarcode    string  `json:"formulaBarcode"`
+	TotalWeight       float64 `json:"totalWeight"`
+	ActualTotalWeight float64 `json:"actualTotalWeight"`
+	TotalWeightUnit   string  `json:"totalWeightUnit"`
+	IsQualified       string  `json:"isQualified"`
+	Operator          string  `json:"operator"`
+	RecordSaveTime    string  `json:"recordSaveTime"`
+}
+
+// 记录批量删除配方称重记录日志
+func SaveDeleteFmaWgtRecBatchLog(headers []FormulaWgtRecHeader) {
+	if len(headers) == 0 {
+		return
+	}
+	var logList []SaveDelFmaWgtRecLogData
+	for _, header := range headers {
+		saveTimeStr := ""
+		if !header.RecordSaveTime.IsZero() {
+			saveTimeStr = header.RecordSaveTime.Format("2006-01-02 15:04:05")
+		}
+		logList = append(logList, SaveDelFmaWgtRecLogData{
+			RecordID:          header.RecordID,
+			FormulaID:         header.FormulaID,
+			FormulaName:       header.FormulaName,
+			FormulaBarcode:    header.FormulaBarcode,
+			TotalWeight:       header.TotalWeight,
+			ActualTotalWeight: header.ActualTotalWeight,
+			TotalWeightUnit:   header.TotalWeightUnit,
+			IsQualified:       header.IsQualified,
+			Operator:          header.Operator,
+			RecordSaveTime:    saveTimeStr,
+		})
+	}
+	if len(logList) > 0 {
+		jsonStr, _ := json.MarshalToString(logList)
+		LogSysOperation(MenuFormulaManage, SubFmaWgtRecDel, OpDeleteStr, jsonStr, "ok", "")
+	}
+}
+
+// 记录清空全库配方称重记录日志
+func SaveClearAllFmaWgtRecLog(total int64) {
+	type ClearLogData struct {
+		Total  int64  `json:"total"`
+		Action string `json:"action"`
+	}
+	clearData := ClearLogData{
+		Total:  total,
+		Action: "clear_all_formula_wgt_records",
+	}
+	jsonStr, _ := json.MarshalToString(clearData)
+	LogSysOperation(MenuFormulaManage, SubFmaWgtRecDel, OpClearStr, jsonStr, "ok", "")
+}
