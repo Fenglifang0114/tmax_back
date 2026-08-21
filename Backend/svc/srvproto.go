@@ -106,6 +106,14 @@ const (
 	REQ_GET_FORMULA_REC_LIST     ReqType = "get_formula_rec_list"     //获取配方称重记录列表
 	REQ_GET_FORMULA_REC_BY_PAGE           ReqType = "get_formula_rec_by_page"           //分页与全局排序获取配方称重记录列表
 	REQ_GET_ALL_FORMULA_REC_FOR_EXPORT    ReqType = "get_all_formula_rec_for_export"    //导出获取所有配方称重记录列表
+	REQ_GET_DRAFT_FORMULA_REC_BY_PAGE        ReqType = "get_draft_formula_rec_by_page"        // 分页获取暂存配方称重记录列表
+	REQ_GET_ALL_DRAFT_FORMULA_REC_FOR_EXPORT ReqType = "get_all_draft_formula_rec_for_export" // 导出获取所有暂存配方称重记录列表
+	REQ_GET_RAW_MATERIAL_BY_PAGE        ReqType = "get_raw_material_by_page"        // 分页与全局排序获取原料列表
+	REQ_GET_RAW_MATERIAL_DICT           ReqType = "get_raw_material_dict"           // 获取原料轻量字典
+	REQ_GET_ALL_RAW_MATERIALS_FOR_EXPORT ReqType = "get_all_raw_materials_for_export" // 导出获取所有原料列表
+	REQ_GET_FORMULA_BY_PAGE             ReqType = "get_formula_by_page"             // 分页获取配方列表
+	REQ_GET_FORMULA_DETAILS_BY_REC_ID  ReqType = "get_formula_details_by_rec_id"  // 懒加载获取单条配方的工序明细
+	REQ_GET_ALL_FORMULAS_FOR_EXPORT     ReqType = "get_all_formulas_for_export"     // 导出获取所有配方列表
 	REQ_GET_ONE_FORMULA_REC_LIST ReqType = "get_fma_rec_by_id"        //获取配方称重记录列表
 	REQ_DEL_FORMULA_WGT_REC_BATCH ReqType = "del_formula_wgt_rec_batch" //批量删除配方称重记录
 	REQ_DEL_ALL_FORMULA_WGT_REC   ReqType = "del_all_formula_wgt_rec"   //清空所有配方称重记录
@@ -209,6 +217,76 @@ type RespExportChunkMsg struct {
 	IsLast     bool                `json:"isLast"`     // 是否为最后一批
 	List       []FormulaWgtRecList `json:"list"`       // 本批次记录
 }
+
+type ReqGetDraftFormulaRecByPage struct {
+	Page       int    `json:"page"`
+	PageSize   int    `json:"pageSize"`
+	SearchText string `json:"searchText"`
+	SortColumn string `json:"sortColumn"`
+	SortAsc    bool   `json:"sortAsc"`
+}
+
+type RespDraftFormulaRecByPage struct {
+	Page       int                 `json:"page"`
+	PageSize   int                 `json:"pageSize"`
+	TotalCount int64               `json:"totalCount"`
+	List       []DrafFmaWgtRecInfo `json:"list"`
+}
+
+type RawMaterialDictItem struct {
+	MaterialID   string `json:"materialId"`
+	MaterialName string `json:"materialName"`
+	IsContainer  bool   `json:"isContainer"`
+}
+
+type ReqGetRawMaterialByPage struct {
+	Page       int    `json:"page"`
+	PageSize   int    `json:"pageSize"`
+	SearchText string `json:"searchText"`
+	SortColumn string `json:"sortColumn"`
+	SortAsc    bool   `json:"sortAsc"`
+}
+
+type RespRawMaterialByPage struct {
+	Page       int           `json:"page"`
+	PageSize   int           `json:"pageSize"`
+	TotalCount int64         `json:"totalCount"`
+	List       []RawMaterial `json:"list"`
+}
+
+type RespExportChunkMsgRaw struct {
+	ChunkIndex int           `json:"chunkIndex"`
+	TotalChunk int           `json:"totalChunk"`
+	TotalCount int64         `json:"totalCount"`
+	IsFirst    bool          `json:"isFirst"`
+	IsLast     bool          `json:"isLast"`
+	List       []RawMaterial `json:"list"`
+}
+
+type ReqGetFormulaByPage struct {
+	Page       int    `json:"page"`
+	PageSize   int    `json:"pageSize"`
+	SearchText string `json:"searchText"`
+	SortColumn string `json:"sortColumn"`
+	SortAsc    bool   `json:"sortAsc"`
+}
+
+type RespFormulaByPage struct {
+	Page       int           `json:"page"`
+	PageSize   int           `json:"pageSize"`
+	TotalCount int64         `json:"totalCount"`
+	List       []FormulaList `json:"list"`
+}
+
+type RespExportChunkMsgFormula struct {
+	ChunkIndex int           `json:"chunkIndex"`
+	TotalChunk int           `json:"totalChunk"`
+	TotalCount int64         `json:"totalCount"`
+	IsFirst    bool          `json:"isFirst"`
+	IsLast     bool          `json:"isLast"`
+	List       []FormulaList `json:"list"`
+}
+
 
 
 type ReqModifyScale struct {
@@ -925,6 +1003,9 @@ const (
 	SCALE_MGR_RESP_FORMULA_TYPE_LIST        ScaleMgrRespMsgType = "resp_formula_type_list"
 	SCALE_MGR_RESP_RAW_TYPE_LIST            ScaleMgrRespMsgType = "resp_raw_type_list"
 	SCALE_MGR_RESP_RAW_LIST                 ScaleMgrRespMsgType = "resp_raw_list"
+	SCALE_MGR_RESP_RAW_MATERIAL_BY_PAGE        ScaleMgrRespMsgType = "resp_raw_material_by_page"
+	SCALE_MGR_RESP_RAW_MATERIAL_DICT           ScaleMgrRespMsgType = "resp_raw_material_dict"
+	SCALE_MGR_RESP_ALL_RAW_MATERIALS_FOR_EXPORT ScaleMgrRespMsgType = "resp_all_raw_materials_for_export"
 	SCALE_MGR_RESP_RAW_DATA_EDIT            ScaleMgrRespMsgType = "resp_raw_data_edit"
 	SCALE_MGR_RESP_RAW_DATA_DELETE          ScaleMgrRespMsgType = "resp_raw_data_delete"
 	SCALE_MGR_RESP_RAW_DATA_ADD             ScaleMgrRespMsgType = "resp_raw_data_add"
@@ -934,6 +1015,9 @@ const (
 	SCALE_MGR_RESP_FORMULA_ADD              ScaleMgrRespMsgType = "resp_formula_add"
 	SCALE_MGR_RESP_FORMULA_UPDATE           ScaleMgrRespMsgType = "resp_formula_update"
 	SCALE_MGR_RESP_FORMULA_LIST             ScaleMgrRespMsgType = "resp_formula_list"
+	SCALE_MGR_RESP_FORMULA_BY_PAGE             ScaleMgrRespMsgType = "resp_formula_by_page"
+	SCALE_MGR_RESP_FORMULA_DETAILS_BY_REC_ID  ScaleMgrRespMsgType = "resp_formula_details_by_rec_id"
+	SCALE_MGR_RESP_ALL_FORMULAS_FOR_EXPORT     ScaleMgrRespMsgType = "resp_all_formulas_for_export"
 	SCALE_MGR_RESP_FORMULA_LIST_BY_BARCODE  ScaleMgrRespMsgType = "resp_formula_list_by_barcode"
 	SCALE_MGR_RESP_CHECK_FMA_ID_AND_BARCODE ScaleMgrRespMsgType = "resp_check_fma_id_and_barcode"
 
@@ -951,6 +1035,8 @@ const (
 	SCALE_MGR_RESP_MANY_FMA_DELETE               ScaleMgrRespMsgType = "resp_many_fma_del"
 	SCALE_MGR_RESP_MANY_RAW_DELETE               ScaleMgrRespMsgType = "resp_many_raw_del"
 	SCALE_MGR_RESP_MANY_DRAFT_FMA_WGT_REC_DELETE ScaleMgrRespMsgType = "resp_many_draft_fma_del"
+	SCALE_MGR_RESP_DRAFT_FORMULA_REC_BY_PAGE           ScaleMgrRespMsgType = "resp_draft_formula_rec_by_page"
+	SCALE_MGR_RESP_ALL_DRAFT_FORMULA_REC_FOR_EXPORT    ScaleMgrRespMsgType = "resp_all_draft_formula_rec_for_export"
 	SCALE_MGR_RESP_FLOW_RATE_ADD                 ScaleMgrRespMsgType = "resp_flow_rate_add"
 	SCALE_MGR_RESP_FLOW_RATE_LIST                ScaleMgrRespMsgType = "resp_flow_rate_list"
 	SCALE_MGR_RESP_GET_ALL_WGT_REC_LIST          ScaleMgrRespMsgType = "resp_get_all_wgt_rec_list"
@@ -1321,6 +1407,7 @@ type ReqDelFormulaWgtRecBatch struct {
 }
 
 type ReqGetFormulaRecByPage struct {
+	FormulaID  string `json:"formulaId"`
 	Page       int    `json:"page"`
 	PageSize   int    `json:"pageSize"`
 	SearchText string `json:"searchText"`

@@ -906,6 +906,180 @@ func (d *DbFormulaInfo) GetAllRawMaterials() ([]RawMaterial, error) {
 	return materials, err
 }
 
+// 分页与全局排序查询原料列表
+func (d *DbFormulaInfo) GetRawMaterialByPage(req ReqGetRawMaterialByPage) (*RespRawMaterialByPage, error) {
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	pageSize := req.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	offset := (page - 1) * pageSize
+
+	sortMap := map[string]string{
+		"materialId":   "material_id",
+		"materialName": "material_name",
+		"categoryId":   "category_id",
+		"createdAt":    "created_at",
+	}
+
+	dbColumn, exists := sortMap[req.SortColumn]
+	if !exists {
+		dbColumn = "rec_id"
+	}
+
+	orderClause := dbColumn
+	if req.SortAsc {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query := db.Model(&RawMaterial{})
+
+	if req.SearchText != "" {
+		kw := "%" + req.SearchText + "%"
+		query = query.Where("material_id LIKE ? OR material_name LIKE ? OR ingredient LIKE ? OR check_code LIKE ? OR remark LIKE ?", kw, kw, kw, kw, kw)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+
+	resp := &RespRawMaterialByPage{
+		Page:       page,
+		PageSize:   pageSize,
+		TotalCount: totalCount,
+		List:       []RawMaterial{},
+	}
+
+	if totalCount == 0 {
+		return resp, nil
+	}
+
+	err = query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&resp.List).Error
+	return resp, err
+}
+
+// 获取极简原料字典（只包含 material_id 和 material_name，专供配方弹窗下拉）
+func (d *DbFormulaInfo) GetRawMaterialDict() ([]RawMaterialDictItem, error) {
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	var items []RawMaterialDictItem
+	err = db.Model(&RawMaterial{}).Select("material_id, material_name").Scan(&items).Error
+	return items, err
+}
+
+// 流式分批获取所有原料（供导出）
+func (d *DbFormulaInfo) GetAllRawMaterialsStream(req ReqGetRawMaterialByPage, chunkSize int, sendChunk func(RespExportChunkMsgRaw)) error {
+	if chunkSize <= 0 {
+		chunkSize = 2000
+	}
+
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	sortMap := map[string]string{
+		"materialId":   "material_id",
+		"materialName": "material_name",
+		"categoryId":   "category_id",
+		"createdAt":    "created_at",
+	}
+
+	dbColumn, exists := sortMap[req.SortColumn]
+	if !exists {
+		dbColumn = "rec_id"
+	}
+
+	orderClause := dbColumn
+	if req.SortAsc {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query := db.Model(&RawMaterial{})
+
+	if req.SearchText != "" {
+		kw := "%" + req.SearchText + "%"
+		query = query.Where("material_id LIKE ? OR material_name LIKE ? OR ingredient LIKE ? OR check_code LIKE ? OR remark LIKE ?", kw, kw, kw, kw, kw)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		return err
+	}
+
+	if totalCount == 0 {
+		sendChunk(RespExportChunkMsgRaw{
+			ChunkIndex: 0,
+			TotalChunk: 0,
+			TotalCount: 0,
+			IsFirst:    true,
+			IsLast:     true,
+			List:       []RawMaterial{},
+		})
+		return nil
+	}
+
+	totalChunk := int(math.Ceil(float64(totalCount) / float64(chunkSize)))
+
+	for i := 0; i < totalChunk; i++ {
+		offset := i * chunkSize
+
+		var materials []RawMaterial
+		err = query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&materials).Error
+		if err != nil {
+			return err
+		}
+
+		sendChunk(RespExportChunkMsgRaw{
+			ChunkIndex: i,
+			TotalChunk: totalChunk,
+			TotalCount: totalCount,
+			IsFirst:    i == 0,
+			IsLast:     i == totalChunk-1,
+			List:       materials,
+		})
+	}
+
+	return nil
+}
+
 // 获取原料
 func (d *DbFormulaInfo) GetRawMaterial(recId int) ([]RawMaterial, error) {
 	var err error
@@ -1145,6 +1319,232 @@ func (d *DbFormulaInfo) GetFormulaByRecId(recId int) (FormulaList, error) {
 	list.Details = formulaDetails
 
 	return list, nil
+}
+
+// 分页与全局排序查询配方列表（懒加载步骤明细）
+func (d *DbFormulaInfo) GetFormulaByPage(req ReqGetFormulaByPage) (*RespFormulaByPage, error) {
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	pageSize := req.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	offset := (page - 1) * pageSize
+
+	sortMap := map[string]string{
+		"formulaId":   "formula_id",
+		"formulaName": "formula_name",
+		"totalWeight": "total_weight",
+		"createdAt":   "created_at",
+	}
+
+	dbColumn, exists := sortMap[req.SortColumn]
+	if !exists {
+		dbColumn = "rec_id"
+	}
+
+	orderClause := dbColumn
+	if req.SortAsc {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query := db.Model(&FormulaHeader{}).Where("is_used = ? AND is_latest = ?", true, true)
+
+	if req.SearchText != "" {
+		kw := "%" + req.SearchText + "%"
+		query = query.Where("formula_id LIKE ? OR formula_name LIKE ? OR formula_mode LIKE ? OR remark LIKE ?", kw, kw, kw, kw)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+
+	resp := &RespFormulaByPage{
+		Page:       page,
+		PageSize:   pageSize,
+		TotalCount: totalCount,
+		List:       []FormulaList{},
+	}
+
+	if totalCount == 0 {
+		return resp, nil
+	}
+
+	var headers []FormulaHeader
+	err = query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&headers).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var recIDs []int
+	for _, h := range headers {
+		recIDs = append(recIDs, h.RecId)
+	}
+
+	var allDetails []FormulaDetail
+	if len(recIDs) > 0 {
+		db.Where("formula_rec_id IN (?)", recIDs).Find(&allDetails)
+	}
+
+	detailsMap := make(map[int][]FormulaDetail)
+	for _, det := range allDetails {
+		detailsMap[det.FormulaRecID] = append(detailsMap[det.FormulaRecID], det)
+	}
+
+	for _, h := range headers {
+		resp.List = append(resp.List, FormulaList{
+			Header:  h,
+			Details: detailsMap[h.RecId],
+		})
+	}
+
+	return resp, nil
+}
+
+// 根据配方 RecId 懒加载获取该配方的工序明细
+func (d *DbFormulaInfo) GetFormulaDetailsByRecId(recId int) ([]FormulaDetail, error) {
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	var details []FormulaDetail
+	err = db.Where("formula_rec_id = ?", recId).Find(&details).Error
+	return details, err
+}
+
+// 流式分批获取所有配方（供导出）
+func (d *DbFormulaInfo) GetAllFormulasStream(req ReqGetFormulaByPage, chunkSize int, sendChunk func(RespExportChunkMsgFormula)) error {
+	if chunkSize <= 0 {
+		chunkSize = 2000
+	}
+
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	sortMap := map[string]string{
+		"formulaId":   "formula_id",
+		"formulaName": "formula_name",
+		"totalWeight": "total_weight",
+		"createdAt":   "created_at",
+	}
+
+	dbColumn, exists := sortMap[req.SortColumn]
+	if !exists {
+		dbColumn = "rec_id"
+	}
+
+	orderClause := dbColumn
+	if req.SortAsc {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query := db.Model(&FormulaHeader{}).Where("is_used = ? AND is_latest = ?", true, true)
+
+	if req.SearchText != "" {
+		kw := "%" + req.SearchText + "%"
+		query = query.Where("formula_id LIKE ? OR formula_name LIKE ? OR formula_mode LIKE ? OR remark LIKE ?", kw, kw, kw, kw)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		return err
+	}
+
+	if totalCount == 0 {
+		sendChunk(RespExportChunkMsgFormula{
+			ChunkIndex: 0,
+			TotalChunk: 0,
+			TotalCount: 0,
+			IsFirst:    true,
+			IsLast:     true,
+			List:       []FormulaList{},
+		})
+		return nil
+	}
+
+	totalChunk := int(math.Ceil(float64(totalCount) / float64(chunkSize)))
+
+	for i := 0; i < totalChunk; i++ {
+		offset := i * chunkSize
+
+		var headers []FormulaHeader
+		err = query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&headers).Error
+		if err != nil {
+			return err
+		}
+
+		var chunkLists []FormulaList
+		if len(headers) > 0 {
+			var recIDs []int
+			for _, h := range headers {
+				recIDs = append(recIDs, h.RecId)
+			}
+
+			var details []FormulaDetail
+			if len(recIDs) > 0 {
+				db.Where("formula_rec_id IN (?)", recIDs).Find(&details)
+			}
+
+			detailsMap := make(map[int][]FormulaDetail)
+			for _, det := range details {
+				detailsMap[det.FormulaRecID] = append(detailsMap[det.FormulaRecID], det)
+			}
+
+			for _, h := range headers {
+				chunkLists = append(chunkLists, FormulaList{
+					Header:  h,
+					Details: detailsMap[h.RecId],
+				})
+			}
+		}
+
+		sendChunk(RespExportChunkMsgFormula{
+			ChunkIndex: i,
+			TotalChunk: totalChunk,
+			TotalCount: totalCount,
+			IsFirst:    i == 0,
+			IsLast:     i == totalChunk-1,
+			List:       chunkLists,
+		})
+	}
+
+	return nil
 }
 
 // 根据记录编号查询 FormulaWgtRecList
@@ -1509,6 +1909,10 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecLists(req ReqGetFormulaRecByPage) ([]
 
 	query := db.Model(&FormulaWgtRecHeader{})
 
+	if req.FormulaID != "" {
+		query = query.Where("formula_id = ?", req.FormulaID)
+	}
+
 	if req.SearchText != "" {
 		kw := "%" + req.SearchText + "%"
 		query = query.Where("record_id LIKE ? OR formula_id LIKE ? OR formula_name LIKE ? OR formula_barcode LIKE ?", kw, kw, kw, kw)
@@ -1591,6 +1995,10 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecListsStream(req ReqGetFormulaRecByPag
 	}
 
 	query := db.Model(&FormulaWgtRecHeader{})
+
+	if req.FormulaID != "" {
+		query = query.Where("formula_id = ?", req.FormulaID)
+	}
 
 	if req.SearchText != "" {
 		kw := "%" + req.SearchText + "%"
@@ -1699,6 +2107,10 @@ func (d *DbFormulaInfo) GetFormulaWgtRecByPage(req ReqGetFormulaRecByPage) (*Res
 	}
 
 	query := db.Model(&FormulaWgtRecHeader{})
+
+	if req.FormulaID != "" {
+		query = query.Where("formula_id = ?", req.FormulaID)
+	}
 
 	if req.SearchText != "" {
 		kw := "%" + req.SearchText + "%"
@@ -2619,6 +3031,232 @@ func (d *DbFormulaInfo) GetAllDraftFmaWgtRecLists() ([]DrafFmaWgtRecInfo, error)
 	}
 
 	return draftFmaWgtRecLists, nil
+}
+
+// 分页与全局排序查询 DrafFmaWgtRecInfo
+func (d *DbFormulaInfo) GetDraftFmaWgtRecByPage(req ReqGetDraftFormulaRecByPage) (*RespDraftFormulaRecByPage, error) {
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	pageSize := req.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	offset := (page - 1) * pageSize
+
+	sortMap := map[string]string{
+		"orderId":   "order_id",
+		"fmaId":     "formula_id",
+		"createdBy": "created_by",
+		"createdAt": "created_at",
+	}
+
+	dbColumn, exists := sortMap[req.SortColumn]
+	if !exists {
+		dbColumn = "rec_id"
+	}
+
+	orderClause := dbColumn
+	if req.SortAsc {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query := db.Model(&DrafFmaWgtRecHeader{})
+
+	if req.SearchText != "" {
+		kw := "%" + req.SearchText + "%"
+		query = query.Where("order_id LIKE ? OR formula_id LIKE ? OR created_by LIKE ? OR remark LIKE ?", kw, kw, kw, kw)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+
+	resp := &RespDraftFormulaRecByPage{
+		Page:       page,
+		PageSize:   pageSize,
+		TotalCount: totalCount,
+		List:       []DrafFmaWgtRecInfo{},
+	}
+
+	if totalCount == 0 {
+		return resp, nil
+	}
+
+	var headers []DrafFmaWgtRecHeader
+	err = query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&headers).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var orderIDs []string
+	for _, h := range headers {
+		if h.OrderId != "" {
+			orderIDs = append(orderIDs, h.OrderId)
+		}
+	}
+
+	var allDetails []DrafFmaWgtRecDetail
+	if len(orderIDs) > 0 {
+		db.Where("order_id IN (?)", orderIDs).Find(&allDetails)
+	}
+
+	detailsMap := make(map[string][]DrafFmaWgtRecDetail)
+	for _, det := range allDetails {
+		detailsMap[det.OrderId] = append(detailsMap[det.OrderId], det)
+	}
+
+	for _, header := range headers {
+		resp.List = append(resp.List, DrafFmaWgtRecInfo{
+			Header:  header,
+			Details: detailsMap[header.OrderId],
+		})
+	}
+
+	return resp, nil
+}
+
+// 分批流式查询暂存配方称重记录
+func (d *DbFormulaInfo) GetAllDraftFmaWgtRecListsStream(req ReqGetDraftFormulaRecByPage, chunkSize int, sendChunk func(RespExportChunkMsg)) error {
+	if chunkSize <= 0 {
+		chunkSize = 2000
+	}
+
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+
+	sortMap := map[string]string{
+		"orderId":   "order_id",
+		"fmaId":     "formula_id",
+		"createdBy": "created_by",
+		"createdAt": "created_at",
+	}
+
+	dbColumn, exists := sortMap[req.SortColumn]
+	if !exists {
+		dbColumn = "rec_id"
+	}
+
+	orderClause := dbColumn
+	if req.SortAsc {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query := db.Model(&DrafFmaWgtRecHeader{})
+
+	if req.SearchText != "" {
+		kw := "%" + req.SearchText + "%"
+		query = query.Where("order_id LIKE ? OR formula_id LIKE ? OR created_by LIKE ? OR remark LIKE ?", kw, kw, kw, kw)
+	}
+
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		return err
+	}
+
+	if totalCount == 0 {
+		sendChunk(RespExportChunkMsg{
+			ChunkIndex: 0,
+			TotalChunk: 0,
+			TotalCount: 0,
+			IsFirst:    true,
+			IsLast:     true,
+			List:       []FormulaWgtRecList{},
+		})
+		return nil
+	}
+
+	totalChunk := int(math.Ceil(float64(totalCount) / float64(chunkSize)))
+
+	for i := 0; i < totalChunk; i++ {
+		offset := i * chunkSize
+
+		var headers []DrafFmaWgtRecHeader
+		err = query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&headers).Error
+		if err != nil {
+			return err
+		}
+
+		var chunkLists []FormulaWgtRecList
+		if len(headers) > 0 {
+			var orderIDs []string
+			for _, h := range headers {
+				if h.OrderId != "" {
+					orderIDs = append(orderIDs, h.OrderId)
+				}
+			}
+
+			var details []DrafFmaWgtRecDetail
+			if len(orderIDs) > 0 {
+				db.Where("order_id IN (?)", orderIDs).Find(&details)
+			}
+
+			detailsMap := make(map[string][]DrafFmaWgtRecDetail)
+			for _, det := range details {
+				detailsMap[det.OrderId] = append(detailsMap[det.OrderId], det)
+			}
+
+			for _, h := range headers {
+				var convertedDetails []FormulaWgtRecDetail
+				for _, d := range detailsMap[h.OrderId] {
+					convertedDetails = append(convertedDetails, FormulaWgtRecDetail{
+						RecordID:     d.OrderId,
+						MaterialID:   d.RawMaterialID,
+						Sequence:     d.Seq,
+						ActualWeight: d.ActualWeight,
+						ScaleName:    d.ScaleName,
+					})
+				}
+				chunkLists = append(chunkLists, FormulaWgtRecList{
+					Header: FormulaWgtRecHeader{
+						RecordID:       h.OrderId,
+						FormulaID:      h.FormulaID,
+						Operator:       h.CreatedBy,
+						RecordSaveTime: h.CreatedAt,
+					},
+					Details: convertedDetails,
+				})
+			}
+		}
+
+		sendChunk(RespExportChunkMsg{
+			ChunkIndex: i,
+			TotalChunk: totalChunk,
+			TotalCount: totalCount,
+			IsFirst:    i == 0,
+			IsLast:     i == totalChunk-1,
+			List:       chunkLists,
+		})
+	}
+
+	return nil
 }
 
 // 查询暂存配方称重记录ByOrderId

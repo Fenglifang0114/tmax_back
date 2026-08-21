@@ -1401,6 +1401,174 @@ func (u GetAllFormulaRecForExportListed) Trigger(srvMgr *SrvMgr, payload ReqGetF
 	}
 }
 
+// 分页获取暂存配方称重记录列表
+var draftFormulaRecByPage DraftFormulaRecByPageListed
+
+type DraftFormulaRecByPageListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr, payload ReqGetDraftFormulaRecByPage)
+	}
+}
+
+func (u *DraftFormulaRecByPageListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr, payload ReqGetDraftFormulaRecByPage)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u DraftFormulaRecByPageListed) Trigger(srvMgr *SrvMgr, payload ReqGetDraftFormulaRecByPage) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr, payload)
+	}
+}
+
+// 导出获取所有暂存配方称重记录列表
+var getAllDraftFormulaRecForExport GetAllDraftFormulaRecForExportListed
+
+type GetAllDraftFormulaRecForExportListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr, payload ReqGetDraftFormulaRecByPage)
+	}
+}
+
+func (u *GetAllDraftFormulaRecForExportListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr, payload ReqGetDraftFormulaRecByPage)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u GetAllDraftFormulaRecForExportListed) Trigger(srvMgr *SrvMgr, payload ReqGetDraftFormulaRecByPage) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr, payload)
+	}
+}
+
+// 分页获取原料列表
+var rawMaterialByPage RawMaterialByPageListed
+
+type RawMaterialByPageListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr, payload ReqGetRawMaterialByPage)
+	}
+}
+
+func (u *RawMaterialByPageListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr, payload ReqGetRawMaterialByPage)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u RawMaterialByPageListed) Trigger(srvMgr *SrvMgr, payload ReqGetRawMaterialByPage) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr, payload)
+	}
+}
+
+// 获取原料轻量字典
+var rawMaterialDict RawMaterialDictListed
+
+type RawMaterialDictListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr)
+	}
+}
+
+func (u *RawMaterialDictListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u RawMaterialDictListed) Trigger(srvMgr *SrvMgr) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr)
+	}
+}
+
+// 导出获取所有原料列表
+var getAllRawMaterialsForExport GetAllRawMaterialsForExportListed
+
+type GetAllRawMaterialsForExportListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr, payload ReqGetRawMaterialByPage)
+	}
+}
+
+func (u *GetAllRawMaterialsForExportListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr, payload ReqGetRawMaterialByPage)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u GetAllRawMaterialsForExportListed) Trigger(srvMgr *SrvMgr, payload ReqGetRawMaterialByPage) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr, payload)
+	}
+}
+
+// 分页获取配方列表
+var formulaByPage FormulaByPageListed
+
+type FormulaByPageListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr, payload ReqGetFormulaByPage)
+	}
+}
+
+func (u *FormulaByPageListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr, payload ReqGetFormulaByPage)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u FormulaByPageListed) Trigger(srvMgr *SrvMgr, payload ReqGetFormulaByPage) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr, payload)
+	}
+}
+
+// 懒加载获取单条配方工序明细
+var formulaDetailsByRecId FormulaDetailsByRecIdListed
+
+type FormulaDetailsByRecIdListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr, payload int)
+	}
+}
+
+func (u *FormulaDetailsByRecIdListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr, payload int)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u FormulaDetailsByRecIdListed) Trigger(srvMgr *SrvMgr, payload int) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr, payload)
+	}
+}
+
+// 导出获取所有配方列表
+var getAllFormulasForExport GetAllFormulasForExportListed
+
+type GetAllFormulasForExportListed struct {
+	handlers []interface {
+		Handle(srvMgr *SrvMgr, payload ReqGetFormulaByPage)
+	}
+}
+
+func (u *GetAllFormulasForExportListed) Register(handler interface {
+	Handle(srvMgr *SrvMgr, payload ReqGetFormulaByPage)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u GetAllFormulasForExportListed) Trigger(srvMgr *SrvMgr, payload ReqGetFormulaByPage) {
+	for _, handler := range u.handlers {
+		go handler.Handle(srvMgr, payload)
+	}
+}
+
 
 
 // 批量删除配方称重记录

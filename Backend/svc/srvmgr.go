@@ -1012,6 +1012,62 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 		} else {
 			getAllFormulaRecForExport.Trigger(scaleMgr.srvMgr, data)
 		}
+	case REQ_GET_DRAFT_FORMULA_REC_BY_PAGE:
+		jsonStr := req.ReqData
+		var data ReqGetDraftFormulaRecByPage
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			draftFormulaRecByPage.Trigger(scaleMgr.srvMgr, data)
+		}
+	case REQ_GET_ALL_DRAFT_FORMULA_REC_FOR_EXPORT:
+		jsonStr := req.ReqData
+		var data ReqGetDraftFormulaRecByPage
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+			getAllDraftFormulaRecForExport.Trigger(scaleMgr.srvMgr, ReqGetDraftFormulaRecByPage{})
+		} else {
+			getAllDraftFormulaRecForExport.Trigger(scaleMgr.srvMgr, data)
+		}
+	case REQ_GET_RAW_MATERIAL_BY_PAGE:
+		jsonStr := req.ReqData
+		var data ReqGetRawMaterialByPage
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			rawMaterialByPage.Trigger(scaleMgr.srvMgr, data)
+		}
+	case REQ_GET_RAW_MATERIAL_DICT:
+		rawMaterialDict.Trigger(scaleMgr.srvMgr)
+	case REQ_GET_ALL_RAW_MATERIALS_FOR_EXPORT:
+		jsonStr := req.ReqData
+		var data ReqGetRawMaterialByPage
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+			getAllRawMaterialsForExport.Trigger(scaleMgr.srvMgr, ReqGetRawMaterialByPage{})
+		} else {
+			getAllRawMaterialsForExport.Trigger(scaleMgr.srvMgr, data)
+		}
+	case REQ_GET_FORMULA_BY_PAGE:
+		jsonStr := req.ReqData
+		var data ReqGetFormulaByPage
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			formulaByPage.Trigger(scaleMgr.srvMgr, data)
+		}
+	case REQ_GET_FORMULA_DETAILS_BY_REC_ID:
+		recId, _ := strconv.Atoi(req.ReqData)
+		formulaDetailsByRecId.Trigger(scaleMgr.srvMgr, recId)
+	case REQ_GET_ALL_FORMULAS_FOR_EXPORT:
+		jsonStr := req.ReqData
+		var data ReqGetFormulaByPage
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+			getAllFormulasForExport.Trigger(scaleMgr.srvMgr, ReqGetFormulaByPage{})
+		} else {
+			getAllFormulasForExport.Trigger(scaleMgr.srvMgr, data)
+		}
 
 		//根据订单号获取配方称重记录
 
@@ -3232,6 +3288,161 @@ func (p getAllFormulaRecForExportNotifier) Handle(mgr *SrvMgr, payload ReqGetFor
 		}
 		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{
 			MsgType: SCALE_MGR_RESP_ALL_FORMULA_REC_FOR_EXPORT,
+			MsgBody: respStr,
+		}
+	})
+	if err != nil {
+		l.Log.Error(err)
+	}
+}
+
+type getDraftFormulaRecByPageNotifier struct{}
+
+func (p getDraftFormulaRecByPageNotifier) Handle(mgr *SrvMgr, payload ReqGetDraftFormulaRecByPage) {
+	l.Log.Debug("Handle getDraftFormulaRecByPageNotifier called")
+	resp, err := mgr.formulaPd.infoPb.GetDraftFmaWgtRecByPage(payload)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_DRAFT_FORMULA_REC_BY_PAGE, MsgBody: ""}
+		return
+	}
+	respStr, err := json.MarshalToString(resp)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_DRAFT_FORMULA_REC_BY_PAGE, MsgBody: ""}
+		return
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_DRAFT_FORMULA_REC_BY_PAGE, MsgBody: respStr}
+}
+
+type getAllDraftFormulaRecForExportNotifier struct{}
+
+func (p getAllDraftFormulaRecForExportNotifier) Handle(mgr *SrvMgr, payload ReqGetDraftFormulaRecByPage) {
+	l.Log.Debug("Handle getAllDraftFormulaRecForExportNotifier stream called")
+	err := mgr.formulaPd.infoPb.GetAllDraftFmaWgtRecListsStream(payload, 2000, func(chunk RespExportChunkMsg) {
+		respStr, err := json.MarshalToString(chunk)
+		if err != nil {
+			l.Log.Error(err)
+			return
+		}
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{
+			MsgType: SCALE_MGR_RESP_ALL_DRAFT_FORMULA_REC_FOR_EXPORT,
+			MsgBody: respStr,
+		}
+	})
+	if err != nil {
+		l.Log.Error(err)
+	}
+}
+
+type getRawMaterialByPageNotifier struct{}
+
+func (p getRawMaterialByPageNotifier) Handle(mgr *SrvMgr, payload ReqGetRawMaterialByPage) {
+	l.Log.Debug("Handle getRawMaterialByPageNotifier called")
+	resp, err := mgr.formulaPd.infoPb.GetRawMaterialByPage(payload)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_MATERIAL_BY_PAGE, MsgBody: ""}
+		return
+	}
+	respStr, err := json.MarshalToString(resp)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_MATERIAL_BY_PAGE, MsgBody: ""}
+		return
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_MATERIAL_BY_PAGE, MsgBody: respStr}
+}
+
+type getRawMaterialDictNotifier struct{}
+
+func (p getRawMaterialDictNotifier) Handle(mgr *SrvMgr) {
+	l.Log.Debug("Handle getRawMaterialDictNotifier called")
+	items, err := mgr.formulaPd.infoPb.GetRawMaterialDict()
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_MATERIAL_DICT, MsgBody: ""}
+		return
+	}
+	respStr, err := json.MarshalToString(items)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_MATERIAL_DICT, MsgBody: ""}
+		return
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RAW_MATERIAL_DICT, MsgBody: respStr}
+}
+
+type getAllRawMaterialsForExportNotifier struct{}
+
+func (p getAllRawMaterialsForExportNotifier) Handle(mgr *SrvMgr, payload ReqGetRawMaterialByPage) {
+	l.Log.Debug("Handle getAllRawMaterialsForExportNotifier stream called")
+	err := mgr.formulaPd.infoPb.GetAllRawMaterialsStream(payload, 2000, func(chunk RespExportChunkMsgRaw) {
+		respStr, err := json.MarshalToString(chunk)
+		if err != nil {
+			l.Log.Error(err)
+			return
+		}
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{
+			MsgType: SCALE_MGR_RESP_ALL_RAW_MATERIALS_FOR_EXPORT,
+			MsgBody: respStr,
+		}
+	})
+	if err != nil {
+		l.Log.Error(err)
+	}
+}
+
+type getFormulaByPageNotifier struct{}
+
+func (p getFormulaByPageNotifier) Handle(mgr *SrvMgr, payload ReqGetFormulaByPage) {
+	l.Log.Debug("Handle getFormulaByPageNotifier called")
+	resp, err := mgr.formulaPd.infoPb.GetFormulaByPage(payload)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_BY_PAGE, MsgBody: ""}
+		return
+	}
+	respStr, err := json.MarshalToString(resp)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_BY_PAGE, MsgBody: ""}
+		return
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_BY_PAGE, MsgBody: respStr}
+}
+
+type getFormulaDetailsByRecIdNotifier struct{}
+
+func (p getFormulaDetailsByRecIdNotifier) Handle(mgr *SrvMgr, payload int) {
+	l.Log.Debug("Handle getFormulaDetailsByRecIdNotifier called")
+	details, err := mgr.formulaPd.infoPb.GetFormulaDetailsByRecId(payload)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_DETAILS_BY_REC_ID, MsgBody: ""}
+		return
+	}
+	respStr, err := json.MarshalToString(details)
+	if err != nil {
+		l.Log.Error(err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_DETAILS_BY_REC_ID, MsgBody: ""}
+		return
+	}
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_FORMULA_DETAILS_BY_REC_ID, MsgBody: respStr}
+}
+
+type getAllFormulasForExportNotifier struct{}
+
+func (p getAllFormulasForExportNotifier) Handle(mgr *SrvMgr, payload ReqGetFormulaByPage) {
+	l.Log.Debug("Handle getAllFormulasForExportNotifier stream called")
+	err := mgr.formulaPd.infoPb.GetAllFormulasStream(payload, 2000, func(chunk RespExportChunkMsgFormula) {
+		respStr, err := json.MarshalToString(chunk)
+		if err != nil {
+			l.Log.Error(err)
+			return
+		}
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{
+			MsgType: SCALE_MGR_RESP_ALL_FORMULAS_FOR_EXPORT,
 			MsgBody: respStr,
 		}
 	})

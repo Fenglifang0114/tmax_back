@@ -259,6 +259,30 @@ func init() {
 	createGetAllFormulaRecForExportNotifier := getAllFormulaRecForExportNotifier{}
 	getAllFormulaRecForExport.Register(createGetAllFormulaRecForExportNotifier)
 
+	createDraftFormulaRecByPageNotifier := getDraftFormulaRecByPageNotifier{}
+	draftFormulaRecByPage.Register(createDraftFormulaRecByPageNotifier)
+
+	createGetAllDraftFormulaRecForExportNotifier := getAllDraftFormulaRecForExportNotifier{}
+	getAllDraftFormulaRecForExport.Register(createGetAllDraftFormulaRecForExportNotifier)
+
+	createRawMaterialByPageNotifier := getRawMaterialByPageNotifier{}
+	rawMaterialByPage.Register(createRawMaterialByPageNotifier)
+
+	createRawMaterialDictNotifier := getRawMaterialDictNotifier{}
+	rawMaterialDict.Register(createRawMaterialDictNotifier)
+
+	createGetAllRawMaterialsForExportNotifier := getAllRawMaterialsForExportNotifier{}
+	getAllRawMaterialsForExport.Register(createGetAllRawMaterialsForExportNotifier)
+
+	createFormulaByPageNotifier := getFormulaByPageNotifier{}
+	formulaByPage.Register(createFormulaByPageNotifier)
+
+	createFormulaDetailsByRecIdNotifier := getFormulaDetailsByRecIdNotifier{}
+	formulaDetailsByRecId.Register(createFormulaDetailsByRecIdNotifier)
+
+	createGetAllFormulasForExportNotifier := getAllFormulasForExportNotifier{}
+	getAllFormulasForExport.Register(createGetAllFormulasForExportNotifier)
+
 
 
 	oneFormulaWgtRecListNotifier := getOneFormulaWgtRecListNotifier{}
