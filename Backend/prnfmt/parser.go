@@ -161,8 +161,9 @@ func ParserFmtToRawCmd(utf8Buff string) (*bytes.Buffer, []VarStruct) {
 		if printerModel == "EPM205" {
 			dataCamp.Write(ESC_CHANGE_ESC_205)
 		}
-
-		if printerModel == "LP50" {
+		if printerModel == "TPUP" {
+			formatbuf = ParseRptTpupLines(buff, dataCamp, lastVarPos)
+		} else if printerModel == "LP50" {
 			formatbuf = ParseLP50Lines(buff, dataCamp, lastVarPos)
 		} else if printerModel == "ZEBRA" {
 			formatbuf = ParseRptZebraLines(buff, dataCamp, lastVarPos)
@@ -321,7 +322,10 @@ func ParserRptFmtToBuf(utf8Buff string, printerModel string, fmtLen int) *bytes.
 	if printerModel == "EPM205" {
 		dataCamp.Write(ESC_CHANGE_ESC_205)
 	}
-	if printerModel == "LP50" { //此处对接的是OS2130打印机
+
+	if printerModel == "TPUP" {
+		formatbuf = ParseRptTpupLines(buff, dataCamp, lastVarPos)
+	} else if printerModel == "LP50" { //此处对接的是OS2130打印机
 		formatbuf = ParseLP50Lines(buff, dataCamp, lastVarPos)
 	} else if printerModel == "ZEBRA" {
 		formatbuf = ParseRptZebraLines(buff, dataCamp, lastVarPos)
