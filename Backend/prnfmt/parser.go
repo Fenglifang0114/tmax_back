@@ -144,6 +144,8 @@ func ParserFmtToRawCmd(utf8Buff string) (*bytes.Buffer, []VarStruct) {
 			formatbuf = ParseTscLines(buff, dataCamp, lastVarPos)
 		} else if printerModel == "SATO" {
 			formatbuf = ParseSbplLines(buff, dataCamp, lastVarPos)
+		} else if printerModel == "BIXOLON" {
+			formatbuf = ParseZplLines(buff, dataCamp, lastVarPos)
 		} else {
 			formatbuf = ParseEplLines(buff, dataCamp, lastVarPos)
 		}
@@ -229,6 +231,8 @@ func ParserFmtToBuf(utf8Buff string, printerModel string, fmtLen int) *bytes.Buf
 		formatbuf = ParseTscLines(buff, dataCamp, lastVarPos)
 	} else if printerModel == "SATO" {
 		formatbuf = ParseSbplLines(buff, dataCamp, lastVarPos)
+	} else if printerModel == "BIXOLON" {
+		formatbuf = ParseZplLines(buff, dataCamp, lastVarPos)
 	} else {
 		formatbuf = ParseEplLines(buff, dataCamp, lastVarPos)
 	}
