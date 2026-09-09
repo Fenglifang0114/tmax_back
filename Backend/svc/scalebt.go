@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"syscall"
 
 	"fmt"
 	"strings"
@@ -449,13 +448,13 @@ func (bt *TBluetooth) connectDevice() error {
 		if attempt == 1 {
 			// 第一次尝试：直接连接
 
-			mac, err := stringToMACAddress(bt.deviceAddress)
+			btAddr, err := bluetooth.ParseAddress(bt.deviceAddress)
 			if err != nil {
 				return fmt.Errorf("MAC地址格式错误: %v", err)
 			}
 
 			// 尝试连接
-			device, err = bt.adapterRef.Connect(bluetooth.Address{MACAddress: mac}, bluetooth.ConnectionParams{
+			device, err = bt.adapterRef.Connect(btAddr, bluetooth.ConnectionParams{
 				ConnectionTimeout: bluetooth.NewDuration(10 * time.Second),
 			})
 

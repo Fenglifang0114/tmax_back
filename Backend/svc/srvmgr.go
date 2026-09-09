@@ -3,7 +3,6 @@ package svc
 import (
 	"encoding/csv"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 	"os"
