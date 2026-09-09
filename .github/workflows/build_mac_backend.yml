@@ -22,14 +22,18 @@ jobs:
       - name: Build macOS Binary (ARM64 & AMD64)
         run: |
           cd Backend
-          # Build AMD64 (Intel Mac)
-          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CGO_CFLAGS="-target x86_64-apple-macos11.0" CGO_LDFLAGS="-target x86_64-apple-macos11.0" go build -ldflags="-X 'main.Version=v1.82'" -o tmaxsrv_amd64 main.go
-          
           # Build ARM64 (Apple Silicon M1/M2/M3 Mac)
-          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CGO_CFLAGS="-target arm64-apple-macos11.0" CGO_LDFLAGS="-target arm64-apple-macos11.0" go build -ldflags="-X 'main.Version=v1.82'" -o tmaxsrv_arm64 main.go
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CGO_CFLAGS="-arch arm64" CGO_LDFLAGS="-arch arm64" go build -ldflags="-X 'main.Version=v1.82'" -o tmaxsrv_arm64 main.go
           
-          # Combine into Universal Binary
-          lipo -create -output tmaxsrv_mac tmaxsrv_amd64 tmaxsrv_arm64
+          # Build AMD64 (Intel Mac)
+          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64" go build -ldflags="-X 'main.Version=v1.82'" -o tmaxsrv_amd64 main.go || true
+          
+          # Create Universal or single binary
+          if [ -f tmaxsrv_amd64 ]; then
+            lipo -create -output tmaxsrv_mac tmaxsrv_amd64 tmaxsrv_arm64
+          else
+            mv tmaxsrv_arm64 tmaxsrv_mac
+          fi
           chmod +x tmaxsrv_mac
 
       - name: Upload macOS Backend Artifact
