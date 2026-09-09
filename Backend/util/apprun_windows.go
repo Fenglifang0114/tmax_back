@@ -10,12 +10,16 @@ import (
 	"syscall"
 )
 
-func RunCommand(output chan<- string, done chan<- error, command string, args ...string) {
-	cmd := exec.Command(command, args...)
-	//隐藏窗口
+func SetHideWindow(cmd *exec.Cmd) {
 	if runtime.GOOS == "windows" {
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	}
+}
+
+func RunCommand(output chan<- string, done chan<- error, command string, args ...string) {
+	cmd := exec.Command(command, args...)
+	//隐藏窗口
+	SetHideWindow(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

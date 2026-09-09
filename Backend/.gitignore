@@ -34,6 +34,9 @@ cpu_profile
 
 #sqlite db file
 *.db
+*.db-shm
+*.db-wal
+*.bin
 
 #printer format file
 *.fmt

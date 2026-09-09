@@ -1271,7 +1271,7 @@ func runPowerShell(command string) (string, error) {
 	}
 
 	cmd := exec.Command("powershell", "-Command", command)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	util.SetHideWindow(cmd)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

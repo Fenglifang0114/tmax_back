@@ -1,4 +1,4 @@
-//go:build linux
+//go:build !windows
 
 package util
 
@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"runtime"
 )
+
+func SetHideWindow(cmd *exec.Cmd) {}
 
 func RunCommand(output chan<- string, done chan<- error, command string, args ...string) {
 	cmd := exec.Command(command, args...)
