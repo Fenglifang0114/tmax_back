@@ -448,7 +448,7 @@ func (bt *TBluetooth) connectDevice() error {
 		if attempt == 1 {
 			// 第一次尝试：直接连接
 
-			btAddr, err := bluetooth.ParseAddress(bt.deviceAddress)
+			btAddr, err := parseBTAddress(bt.deviceAddress)
 			if err != nil {
 				return fmt.Errorf("MAC地址格式错误: %v", err)
 			}
