@@ -44,6 +44,11 @@ func (p *SysUserProvider) GetUserInfo(userName string) (*SysUser, error) {
 	return user, err
 }
 
+// 通过 RFID 获取用户信息
+func (p *SysUserProvider) GetUserByRfid(rfid string) (*SysUser, error) {
+	return p.infoPb.GetUserByRfid(rfid)
+}
+
 // 新增用户
 func (p *SysUserProvider) AddUser(user *SysUser) error {
 	return p.infoPb.CreateUser(user)

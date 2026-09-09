@@ -1071,7 +1071,6 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 
 		//根据订单号获取配方称重记录
 
-
 	case REQ_GET_ONE_FORMULA_REC_LIST:
 		jsonStr := req.ReqData
 		oneFmaWgtRecList.Trigger(scaleMgr.srvMgr, jsonStr)
@@ -1204,6 +1203,14 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 			l.Log.Error(err)
 		} else {
 			login.Trigger(scaleMgr.srvMgr, data)
+		}
+	case REQ_RFID_LOGIN:
+		jsonStr := req.ReqData
+		var data ReqRfidLogin
+		if err := json.UnmarshalFromString(jsonStr, &data); err != nil {
+			l.Log.Error(err)
+		} else {
+			rfidLogin.Trigger(scaleMgr.srvMgr, data)
 		}
 	case REQ_LOGOUT:
 		logout.Trigger(scaleMgr.srvMgr)
@@ -3451,8 +3458,6 @@ func (p getAllFormulasForExportNotifier) Handle(mgr *SrvMgr, payload ReqGetFormu
 	}
 }
 
-
-
 // 根据配方ID获取配方称重记录
 func (p getOneFormulaWgtRecListNotifier) Handle(mgr *SrvMgr, payload string) {
 	// Do something for this event
@@ -3538,7 +3543,6 @@ func (p delAllFormulaWgtRecNotifier) Handle(mgr *SrvMgr) {
 		MsgBody: respMsg,
 	}
 }
-
 
 // 删除配方
 func (p delFormulaNotifier) Handle(mgr *SrvMgr, payload ReqDelFmaData) {
@@ -4346,6 +4350,16 @@ func (p addSysUserNotifier) Handle(mgr *SrvMgr, payload ReqAddSysUser) {
 	// Do something for this event
 	l.Log.Debug("Handle addSysUserNotifier called")
 
+	rfid := strings.TrimSpace(payload.Rfid)
+	if rfid != "" {
+		existingUser, err := mSrvMgr.sysUserPd.GetUserByRfid(rfid)
+		if err == nil && existingUser != nil && existingUser.UserName != "" {
+			l.Log.Warnf("RFID %s already bound to user %s", rfid, existingUser.UserName)
+			mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_ADD_SYS_USER, MsgBody: "fail,rfid duplicate"}
+			return
+		}
+	}
+
 	_, username, _ := GetCurrentUser()
 
 	userInfo := SysUser{
@@ -4361,6 +4375,7 @@ func (p addSysUserNotifier) Handle(mgr *SrvMgr, payload ReqAddSysUser) {
 		Remark:        payload.Remark,
 		CreatedByName: username,
 		UpdatedByName: username,
+		Rfid:          payload.Rfid,
 	}
 	err := mSrvMgr.sysUserPd.AddUser(&userInfo)
 	if err != nil {
@@ -4417,6 +4432,16 @@ func (p updateSysUserNotifier) Handle(mgr *SrvMgr, payload ReqUpdateSysUser) {
 		return
 	}
 
+	rfid := strings.TrimSpace(payload.UpdateUser.Rfid)
+	if rfid != "" {
+		existingUser, err := mSrvMgr.sysUserPd.GetUserByRfid(rfid)
+		if err == nil && existingUser != nil && existingUser.UserId != payload.UpdateUser.UserId {
+			l.Log.Warnf("RFID %s already bound to user %s (id %d)", rfid, existingUser.UserName, existingUser.UserId)
+			mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_UPDATE_SYS_USER, MsgBody: "fail,rfid duplicate"}
+			return
+		}
+	}
+
 	// 比较新旧数据，找出变更的字段和原始值
 	updatedFields, oldFieldValues := CompareUserFields(user, payload.UpdateUser)
 
@@ -4439,6 +4464,7 @@ func (p updateSysUserNotifier) Handle(mgr *SrvMgr, payload ReqUpdateSysUser) {
 		Remark:        payload.UpdateUser.Remark,
 		UpdatedBy:     payload.UpdateUser.UpdatedBy,
 		UpdatedByName: username,
+		Rfid:          payload.UpdateUser.Rfid,
 	}
 
 	// 密码是否更新
@@ -4573,6 +4599,29 @@ func (p loginNotifier) Handle(mgr *SrvMgr, payload ReqLogin) {
 
 	}
 
+}
+
+// RFID 刷卡登录
+func (p rfidLoginNotifier) Handle(mgr *SrvMgr, payload ReqRfidLogin) {
+	l.Log.Debug("Handle rfidLoginNotifier called")
+	if payload.Rfid == "" {
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RFID_LOGIN, MsgBody: "fail,rfid empty"}
+		return
+	}
+	user, err := mSrvMgr.sysUserPd.GetUserByRfid(payload.Rfid)
+	if err != nil || user == nil {
+		l.Log.Error("RFID user not found: ", err)
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RFID_LOGIN, MsgBody: "fail,user not found"}
+		return
+	}
+	if !user.IsEnabled {
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RFID_LOGIN, MsgBody: "fail,user disabled"}
+		return
+	}
+
+	SetCurrentUser(user.UserId, user.NickName, user.RoleId)
+	LogSysOperation(MenuSystem, SubSysLogin, OpLoginStr, "RFID Login: "+user.UserName, "ok", "")
+	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_RFID_LOGIN, MsgBody: "ok," + user.UserName}
 }
 
 // 登出

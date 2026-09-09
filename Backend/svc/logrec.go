@@ -47,6 +47,7 @@ type SaveDelUser struct {
 	Remark        string
 	CreatedTime   string
 	UpdatedTime   string
+	Rfid          string
 }
 
 type SaveAddUser struct {
@@ -61,6 +62,7 @@ type SaveAddUser struct {
 	InitialPageId int
 	Remark        string
 	PageIds       []int
+	Rfid          string
 }
 
 type DelCalibrationLog struct {
@@ -149,6 +151,10 @@ func CompareUserFields(oldUser *SysUser, newUser UpdateUser) (map[string]interfa
 	if newUser.Remark != oldUser.Remark {
 		updatedFields["Remark"] = newUser.Remark  // 新值
 		oldFieldValues["Remark"] = oldUser.Remark // 原始值
+	}
+	if newUser.Rfid != oldUser.Rfid {
+		updatedFields["Rfid"] = newUser.Rfid  // 新值
+		oldFieldValues["Rfid"] = oldUser.Rfid // 原始值
 	}
 	return updatedFields, oldFieldValues
 }
@@ -303,6 +309,7 @@ func SaveAddUserFunc(newUser *SysUser, pagesId []int) string {
 		InitialPageId: newUser.InitialPageId,
 		Remark:        newUser.Remark,
 		PageIds:       pagesId,
+		Rfid:          newUser.Rfid,
 	}
 
 	jsonStr, _ := json.MarshalToString(userTemp)
@@ -396,6 +403,7 @@ func SaveDelUserFunc(users []SysUser) string {
 			Remark:        user.Remark,
 			CreatedTime:   user.CreatedTime.Format("2006-01-02 15:04:05"),
 			UpdatedTime:   user.UpdatedTime.Format("2006-01-02 15:04:05"),
+			Rfid:          user.Rfid,
 		}
 		delUsers = append(delUsers, reqInfo)
 	}

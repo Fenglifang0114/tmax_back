@@ -45,6 +45,7 @@ type SysUser struct {
 	CreatedByName string
 	UpdatedByName string
 	IsChanged     bool `gorm:"not null;default:false;"`
+	Rfid          string
 }
 
 // 操作员-页面关联表
@@ -274,6 +275,28 @@ func (d *DbSysUser) GetUserByUserId(userId int) (*SysUser, error) {
 	}
 	var user SysUser
 	result := db.First(&user, "user_id = ?", userId)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &user, nil
+}
+
+// 获取用户信息(通过RFID卡号)
+func (d *DbSysUser) GetUserByRfid(rfid string) (*SysUser, error) {
+	var err error
+	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	var user SysUser
+	result := db.First(&user, "rfid = ?", rfid)
 	if result.Error != nil {
 		return nil, result.Error
 	}

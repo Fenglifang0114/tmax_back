@@ -2333,6 +2333,27 @@ func (u Login) Trigger(mgr *SrvMgr, payload ReqLogin) {
 	}
 }
 
+// RFID 刷卡登录
+var rfidLogin RfidLogin
+
+type RfidLogin struct {
+	handlers []interface {
+		Handle(mgr *SrvMgr, payload ReqRfidLogin)
+	}
+}
+
+func (u *RfidLogin) Register(handler interface {
+	Handle(mgr *SrvMgr, payload ReqRfidLogin)
+}) {
+	u.handlers = append(u.handlers, handler)
+}
+
+func (u RfidLogin) Trigger(mgr *SrvMgr, payload ReqRfidLogin) {
+	for _, handler := range u.handlers {
+		go handler.Handle(mgr, payload)
+	}
+}
+
 // 登出
 var logout Logout
 

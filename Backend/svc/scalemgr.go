@@ -388,6 +388,9 @@ func init() {
 	createLoginNotifier := loginNotifier{}
 	login.Register(createLoginNotifier)
 
+	createRfidLoginNotifier := rfidLoginNotifier{}
+	rfidLogin.Register(createRfidLoginNotifier)
+
 	createLogoutNotifier := logoutNotifier{}
 	logout.Register(createLogoutNotifier)
 
@@ -668,6 +671,8 @@ type disableSysUserNotifier struct{}
 type changePasswordNotifier struct{}
 
 type loginNotifier struct{}
+
+type rfidLoginNotifier struct{}
 
 type logoutNotifier struct{}
 
