@@ -36,8 +36,14 @@ jobs:
           fi
           chmod +x tmaxsrv_mac
 
+          # Perform Ad-Hoc signing for macOS
+          codesign --force --options runtime --deep --sign - tmaxsrv_mac
+
+          # Package into ZIP for distribution
+          zip -r tmaxsrv_mac.zip tmaxsrv_mac
+
       - name: Upload macOS Backend Artifact
         uses: actions/upload-artifact@v4
         with:
           name: tmaxBack-macOS-Executable
-          path: Backend/tmaxsrv_mac
+          path: Backend/tmaxsrv_mac.zip
