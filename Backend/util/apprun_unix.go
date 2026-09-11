@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"fmt"
 	"os/exec"
-	"runtime"
 )
 
 func SetHideWindow(cmd *exec.Cmd) {}
