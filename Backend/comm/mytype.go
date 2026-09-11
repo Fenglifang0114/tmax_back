@@ -367,6 +367,7 @@ func GetSrvDataPath() string {
 			return filepath.Join("..", SRV_DATA_PATH)
 		}
 	}
+	_ = os.MkdirAll(p, 0755)
 	return p
 }
 

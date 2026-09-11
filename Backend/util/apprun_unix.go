@@ -13,12 +13,6 @@ func SetHideWindow(cmd *exec.Cmd) {}
 
 func RunCommand(output chan<- string, done chan<- error, command string, args ...string) {
 	cmd := exec.Command(command, args...)
-	//隐藏窗口
-	if runtime.GOOS == "darwin" {
-		cmd = exec.Command("osascript", "-e", "tell app \"Terminal\" to set miniaturized of window 1 to true", "-e", "tell application \"System Events\" to keystroke \"m\" using {command down, option down}")
-	} else if runtime.GOOS == "linux" {
-		cmd = exec.Command("xdotool", "getactivewindow", "windowminimize")
-	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -48,7 +42,7 @@ func RunCommand(output chan<- string, done chan<- error, command string, args ..
 }
 
 func KillApp(appName string) error {
-	cmd := exec.Command("taskkill", "/F", "/IM", appName)
+	cmd := exec.Command("pkill", "-f", appName)
 	err := cmd.Run()
 	if err != nil {
 		fmt.Println("Error killing process:", err)

@@ -2,6 +2,8 @@ package svc
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	l "tmaxsrv/log"
 
 	"github.com/gitteamer/log"
@@ -14,22 +16,26 @@ type DbScaleConn struct {
 }
 
 func NewDbScaleConn(dbName string) (*DbScaleConn, error) {
-	var err error
+	if dir := filepath.Dir(dbName); dir != "" {
+		_ = os.MkdirAll(dir, 0755)
+	}
 	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
 	if err != nil {
-		l.Log.Debug("failed to connect database")
-
+		l.Log.Error("failed to connect database: ", err)
+		return nil, err
 	}
 	sqlDB, err := db.DB()
 	if err != nil {
-		l.Log.Debug("failed to connect database")
+		l.Log.Error("failed to get sqlDB: ", err)
+		return nil, err
 	}
 	if sqlDB != nil {
 		defer sqlDB.Close()
 	}
 	// Migrate the schema
 	if err = db.AutoMigrate(&ScaleConnMedia{}, &SrvScaleRel{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
+		l.Log.Error("failed to migrate database of scale connection: ", err)
+		return nil, err
 	}
 	return &DbScaleConn{dbName: dbName}, nil
 }
