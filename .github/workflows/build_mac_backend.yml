@@ -39,8 +39,19 @@ jobs:
           # Perform Ad-Hoc signing for macOS
           codesign --force --options runtime --deep --sign - tmaxsrv_mac
 
+          # Create standalone launcher script
+          cat << 'EOF' > start.command
+          #!/bin/bash
+          DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+          xattr -d com.apple.quarantine "$DIR/tmaxsrv_mac" 2>/dev/null
+          chmod +x "$DIR/tmaxsrv_mac"
+          "$DIR/tmaxsrv_mac"
+          EOF
+          chmod +x start.command
+
           # Package into ZIP for distribution
-          zip -r tmaxsrv_mac.zip tmaxsrv_mac
+          zip -r tmaxsrv_mac.zip tmaxsrv_mac start.command
+
 
       - name: Upload macOS Backend Artifact
         uses: actions/upload-artifact@v4
