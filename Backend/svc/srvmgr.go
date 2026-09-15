@@ -153,7 +153,7 @@ func NewSrvMgr(scaleMgr *ScaleMgr, quitch chan bool) *SrvMgr {
 
 	var licKeyList []string
 
-	licFilePath := filepath.Join(comm.GetExePath(), comm.LICENSE_FILE)
+	licFilePath := comm.GetLicFilePath()
 
 	licKey, _ = lic.ReadLicFile(licFilePath)
 
@@ -695,7 +695,7 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_CHECK_LICENSE_KEY, MsgBody: moduleName + "," + isValidStr + "," + machineId + "," + licValidDate}
 
 	case REQ_UPDATE_LICENSE:
-		licPath := filepath.Join(comm.GetExePath(), comm.LICENSE_FILE)
+		licPath := comm.GetLicSavePath()
 		if err := lic.SaveKey(licPath, req.ReqData); err != nil {
 			mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_UPDATE_LICENSE, MsgBody: "fail"}
 		}
@@ -1478,7 +1478,7 @@ func getLicenseList() {
 	var newLicList []LicenseInfo
 	var licKeyList []string
 
-	licFilePath := filepath.Join(comm.GetExePath(), comm.LICENSE_FILE)
+	licFilePath := comm.GetLicFilePath()
 
 	licKey, _ = lic.ReadLicFile(licFilePath)
 

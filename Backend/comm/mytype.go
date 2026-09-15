@@ -352,6 +352,22 @@ const (
 	UNKNOWN_DATA RespMsgType = "unknown_data"
 )
 
+func GetLicFilePath() string {
+	srvLic := filepath.Join(GetSrvDataPath(), LICENSE_FILE)
+	if _, err := os.Stat(srvLic); err == nil {
+		return srvLic
+	}
+	exeLic := filepath.Join(GetExePath(), LICENSE_FILE)
+	if _, err := os.Stat(exeLic); err == nil {
+		return exeLic
+	}
+	return srvLic
+}
+
+func GetLicSavePath() string {
+	return filepath.Join(GetSrvDataPath(), LICENSE_FILE)
+}
+
 func GetServicePath() string {
 	myPath := GetSrvDataPath()
 	return filepath.Join(myPath, COMM_SERVICE)
