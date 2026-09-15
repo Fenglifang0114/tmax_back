@@ -141,7 +141,8 @@ func main() {
 
 	err = s.Run()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("service.Run error, fallback to direct run:", err)
+		prg.run()
 	}
 }
 
