@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -357,6 +358,15 @@ func GetServicePath() string {
 }
 
 func GetSrvDataPath() string {
+	if runtime.GOOS == "darwin" {
+		home, err := os.UserHomeDir()
+		if err == nil && home != "" {
+			p := filepath.Join(home, "Library", "Application Support", "tmax", SRV_DATA_PATH)
+			if err := os.MkdirAll(p, 0755); err == nil {
+				return p
+			}
+		}
+	}
 	myPath := GetExePath()
 	p := filepath.Join(myPath, SRV_DATA_PATH)
 	if _, err := os.Stat(p); os.IsNotExist(err) {
@@ -367,7 +377,15 @@ func GetSrvDataPath() string {
 			return filepath.Join("..", SRV_DATA_PATH)
 		}
 	}
-	_ = os.MkdirAll(p, 0755)
+	err := os.MkdirAll(p, 0755)
+	if err != nil {
+		home, herr := os.UserHomeDir()
+		if herr == nil && home != "" {
+			hp := filepath.Join(home, ".tmax", SRV_DATA_PATH)
+			_ = os.MkdirAll(hp, 0755)
+			return hp
+		}
+	}
 	return p
 }
 
@@ -410,6 +428,11 @@ func GetCommDataBasePath() string {
 }
 
 func getCurrentPath() (string, error) {
+	execPath, err := os.Executable()
+	if err == nil && execPath != "" {
+		dir := filepath.Dir(execPath)
+		return dir + string(filepath.Separator), nil
+	}
 	file, err := exec.LookPath(os.Args[0])
 	if err != nil {
 		return "", err
