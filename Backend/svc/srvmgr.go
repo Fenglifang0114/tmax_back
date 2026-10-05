@@ -4432,6 +4432,12 @@ func (p updateSysUserNotifier) Handle(mgr *SrvMgr, payload ReqUpdateSysUser) {
 		return
 	}
 
+	if strings.TrimSpace(payload.UpdateUser.UserName) == "" || strings.TrimSpace(payload.UpdateUser.NickName) == "" {
+		l.Log.Warn("UserName or NickName is empty, update rejected")
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_UPDATE_SYS_USER, MsgBody: "fail,username empty"}
+		return
+	}
+
 	rfid := strings.TrimSpace(payload.UpdateUser.Rfid)
 	if rfid != "" {
 		existingUser, err := mSrvMgr.sysUserPd.GetUserByRfid(rfid)

@@ -344,20 +344,35 @@ func (d *DbSysUser) UpdateUser(user *SysUser, pswUpdated bool) error {
 	if result.Error != nil {
 		return fmt.Errorf("fail to update user: %w", result.Error)
 	}
-	// 1. 密码加密
+	updateMap := map[string]interface{}{
+		"user_name":       user.UserName,
+		"nick_name":       user.NickName,
+		"role_id":         user.RoleId,
+		"is_enabled":      user.IsEnabled,
+		"email":           user.Email,
+		"phone":           user.Phone,
+		"initial_page_id": user.InitialPageId,
+		"remark":          user.Remark,
+		"updated_by":      user.UpdatedBy,
+		"updated_by_name": user.UpdatedByName,
+		"rfid":            user.Rfid,
+		"updated_time":    time.Now(),
+	}
+
+	// 密码加密
 	if pswUpdated {
 		encryptedPassword, err := EncryptPassword(user.Password)
 		if err != nil {
 			return fmt.Errorf("fail to update user: %w", err)
 		}
-		user.Password = encryptedPassword
-		user.IsChanged = true
+		updateMap["password"] = encryptedPassword
+		updateMap["is_changed"] = true
 	}
 
-	// 2. 执行更新操作（仅更新提供的字段）
+	// 2. 执行更新操作（使用 map 显式更新对应字段，原生完美支持写回 "" 空字符串清空）
 	result = db.Model(&SysUser{}).
-		Where("user_id = ?", user.UserId). // 明确指定更新条件
-		Updates(user)                      // 使用map传递需要更新的字段
+		Where("user_id = ?", user.UserId).
+		Updates(updateMap)
 	if result.Error != nil {
 		return fmt.Errorf("fail to update user: %w", result.Error)
 	}
