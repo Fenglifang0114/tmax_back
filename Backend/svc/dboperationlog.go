@@ -1,17 +1,16 @@
 package svc
 
 import (
+	"errors"
 	"time"
 	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-//系统用户表
-
 type DbOperationLog struct {
 	dbName string
+	db     *gorm.DB
 }
 
 type OperationLog struct {
@@ -33,7 +32,6 @@ type OperationLog struct {
 	OperatorName  string    `gorm:"not null;"`
 	RoleId        int       `gorm:"not null;"`
 
-	// 关联关系（可选，用于GORM查询）
 	OperatorType *OperationType `gorm:"foreignKey:OperatorTypeID"`
 	OperatorMenu *OperationMenu `gorm:"foreignKey:OperatorMenuID"`
 }
@@ -44,8 +42,6 @@ type OperationType struct {
 	Desc string // 描述（可选）
 }
 
-// 操作类型 1：登录 2：退出 3：增加 4：删除 5：修改 6：查询 7：下发 8：导入 9：导出 10：其他
-
 type OperationMenu struct {
 	ID       int    `gorm:"primaryKey"`
 	Name     string `gorm:"not null;unique"` // 如"秤管理"、"PLU列表"
@@ -54,96 +50,62 @@ type OperationMenu struct {
 }
 
 func NewDbOperationLog(dbName string) (*DbOperationLog, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
-		l.Log.Debug("failed to connect database")
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
+		return nil, err
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
 	if err = db.AutoMigrate(
 		&OperationType{},
 		&OperationMenu{},
 		&OperationLog{},
 	); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
+		l.Log.Errorf("failed to migrate database of operation log: %v", err)
 	}
 
-	return &DbOperationLog{dbName: dbName}, nil
+	return &DbOperationLog{dbName: dbName, db: db}, nil
 }
 
-// 创建操作日志
-func (d *DbOperationLog) CreateOperationLog(log *OperationLog) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	if err = db.Create(log).Error; err != nil {
-		return err
+func (d *DbOperationLog) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
 	}
 	return nil
 }
 
+// 创建操作日志
+func (d *DbOperationLog) CreateOperationLog(log *OperationLog) error {
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
+	}
+	return d.db.Create(log).Error
+}
+
 // 删除操作日志
 func (d *DbOperationLog) DeleteOperationLog(logID []int) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 	for _, id := range logID {
-		if err = db.Delete(&SysUser{}, "user_id = ?", id).Error; err != nil {
+		if err := d.db.Delete(&SysUser{}, "user_id = ?", id).Error; err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
 // 查询操作日志列表
 func (d *DbOperationLog) ListOperationLogs() ([]OperationLog, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []OperationLog{}, err
-
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []OperationLog{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return []OperationLog{}, errors.New("db connection is nil")
 	}
 	var logs []OperationLog
-	result := db.Find(&logs)
+	result := d.db.Find(&logs)
 	if result.Error != nil {
-		return []OperationLog{}, err
+		return []OperationLog{}, result.Error
 	}
-	if result.RowsAffected == 0 {
-		return []OperationLog{}, err
-	}
-	return logs, result.Error
+	return logs, nil
 }

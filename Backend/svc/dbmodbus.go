@@ -4,68 +4,50 @@ import (
 	"errors"
 	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type DbModbusServices struct {
 	dbName string
+	db     *gorm.DB
 }
 
 func NewDbModbusServices(dbName string) (*DbModbusServices, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
-		l.Log.Debug("failed to connect database")
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
+		return nil, err
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
 	if err = db.AutoMigrate(&ModbusServiceInfo{}); err != nil {
-		l.Log.Debug("failed to migrate database of modbus services")
+		l.Log.Errorf("failed to migrate database of modbus services: %v", err)
 	}
-	return &DbModbusServices{dbName: dbName}, nil
+	return &DbModbusServices{dbName: dbName, db: db}, nil
+}
+
+func (d *DbModbusServices) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
 }
 
 func (d *DbModbusServices) GetModbusServiceList() ([]ModbusServiceInfo, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
 	var services []ModbusServiceInfo
-	db.Find(&services)
+	d.db.Find(&services)
 	return services, nil
 }
 
 func (d *DbModbusServices) InsertModbusService(service *ModbusServiceInfo) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	tx := db.Create(service)
+	tx := d.db.Create(service)
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -73,20 +55,11 @@ func (d *DbModbusServices) InsertModbusService(service *ModbusServiceInfo) error
 }
 
 func (d *DbModbusServices) UpdateModbusService(service ModbusServiceInfo) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
-	rowAffected := db.Model(&service).Where("id=?", service.Id).Select("*").Updates(&service).RowsAffected
+	rowAffected := d.db.Model(&service).Where("id=?", service.Id).Select("*").Updates(&service).RowsAffected
 	if rowAffected == 0 {
 		return errors.New("@UpdateModbusService failed, maybe record not existing")
 	}
@@ -95,19 +68,10 @@ func (d *DbModbusServices) UpdateModbusService(service ModbusServiceInfo) error 
 }
 
 func (d *DbModbusServices) DeleteModbusService(id uint) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
-	db.Where("id=?", id).Delete(&ModbusServiceInfo{})
+	d.db.Where("id=?", id).Delete(&ModbusServiceInfo{})
 	return nil
 }

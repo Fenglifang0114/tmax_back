@@ -133,7 +133,16 @@ func LogSysOperation(module string, subModule string, opType string, opContent s
 
 	// 3. 异步写入数据库（不阻塞主流程）
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				l.Log.Errorf("panic in LogSysOperation goroutine: %v", r)
+			}
+		}()
 		// 写入数据库
+		if mSrvMgr == nil || mSrvMgr.sysLogPd == nil {
+			l.Log.Error("mSrvMgr or sysLogPd is nil when writing syslog")
+			return
+		}
 		if err := mSrvMgr.sysLogPd.AddSyslog(log); err != nil {
 			l.Log.Error(fmt.Sprintf("Failed to write operation log: %v, log content: %+v", err, log))
 		} else {
@@ -193,7 +202,16 @@ func LogScaleWgtOperation(mode int, wgtInfo ScaleRec, remarks string) {
 
 	// 3. 异步写入数据库（不阻塞主流程）
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				l.Log.Errorf("panic in LogScaleWgtOperation goroutine: %v", r)
+			}
+		}()
 		// 写入数据库
+		if mSrvMgr == nil || mSrvMgr.sysLogPd == nil {
+			l.Log.Error("mSrvMgr or sysLogPd is nil when writing scale log")
+			return
+		}
 		if err := mSrvMgr.sysLogPd.AddScaleLog(log); err != nil {
 			l.Log.Error(fmt.Sprintf("Failed to write operation log: %v, log content: %+v", err, log))
 		} else {
@@ -234,7 +252,16 @@ func LogCalLogOperation(rec CalibrationLog) {
 
 	// 3. 异步写入数据库（不阻塞主流程）
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				l.Log.Errorf("panic in LogCalLogOperation goroutine: %v", r)
+			}
+		}()
 		// 写入数据库
+		if mSrvMgr == nil || mSrvMgr.sysLogPd == nil {
+			l.Log.Error("mSrvMgr or sysLogPd is nil when writing cal log")
+			return
+		}
 		if err := mSrvMgr.sysLogPd.AddCalibrationLog(log); err != nil {
 			l.Log.Error(fmt.Sprintf("Failed to write operation log: %v, log content: %+v", err, log))
 		} else {

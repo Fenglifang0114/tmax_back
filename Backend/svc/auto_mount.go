@@ -59,6 +59,12 @@ func StartAutoMountTask(s *ScaleMgr) {
 }
 
 func autoMountLoop(s *ScaleMgr) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.Log.Errorf("auto_mount: panic recovered in autoMountLoop: %v", r)
+		}
+	}()
+
 	// Wait a bit before starting the first scan
 	time.Sleep(5 * time.Second)
 
@@ -123,6 +129,11 @@ func autoMountLoop(s *ScaleMgr) {
 }
 
 func testAndMountPort(s *ScaleMgr, port string) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.Log.Errorf("auto_mount: panic recovered in testAndMountPort(%s): %v", port, r)
+		}
+	}()
 	if !EnableAutoScan {
 		return
 	}

@@ -43,6 +43,8 @@ func (c *Scale) UpdateFirmware(name string) (*ScaleRespMsg, error) {
 	var respMsg *ScaleRespMsg
 	respOk := &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "ok", ScaleId: c.Id}
 	respFail := &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail", ScaleId: c.Id}
+	progressTicker := time.NewTicker(250 * time.Millisecond)
+	defer progressTicker.Stop()
 	for {
 		if isFinish {
 			break
@@ -85,7 +87,7 @@ func (c *Scale) UpdateFirmware(name string) (*ScaleRespMsg, error) {
 				fmt.Println("Command completed")
 			}
 			isFinish = true
-		case <-time.After(time.Duration(250) * time.Millisecond):
+		case <-progressTicker.C:
 			if isStartUpdate {
 				percentage = percentage + 25000.0/updateTimeMs
 				percentageInt := int(percentage)
@@ -124,6 +126,8 @@ func (c *Scale) UpdateFirmwareOld(name string) (*ScaleRespMsg, error) {
 	var respMsg *ScaleRespMsg
 	respOk := &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "ok", ScaleId: c.Id}
 	respFail := &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "fail", ScaleId: c.Id}
+	progressTickerOld := time.NewTicker(250 * time.Millisecond)
+	defer progressTickerOld.Stop()
 	for {
 		if isFinish {
 			break
@@ -166,7 +170,7 @@ func (c *Scale) UpdateFirmwareOld(name string) (*ScaleRespMsg, error) {
 				fmt.Println("Command completed")
 			}
 			isFinish = true
-		case <-time.After(time.Duration(250) * time.Millisecond):
+		case <-progressTickerOld.C:
 			if isStartUpdate {
 				percentage = percentage + 25000.0/updateTimeMs
 				percentageInt := int(percentage)
@@ -900,10 +904,12 @@ func perfCmdNwaitResult(c *Scale, cmd []byte, waitMsgType m.RespMsgType, timeout
 
 		fmt.Printf("================wait: %v\n", waitMsgType)
 
+		respTimer := time.NewTimer(time.Duration(curTimeoutMs) * time.Millisecond)
 		select {
 		case ret = <-ch:
+			respTimer.Stop()
 			l.Log.Infof("【调试】收到回复，提前结束等待: type=%v, body=%v", ret.MsgType, ret.MsgBody)
-		case <-time.After(time.Duration(curTimeoutMs) * time.Millisecond):
+		case <-respTimer.C:
 			l.Log.Infof("【调试】等待超时: %v ms", curTimeoutMs)
 			ret = &ScaleRespMsg{MsgType: waitMsgType, ScaleId: c.Id, MsgBody: "timeout"}
 			err = fmt.Errorf("no response, time out")

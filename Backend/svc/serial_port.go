@@ -1057,6 +1057,11 @@ func (sm *SrvMgr) StartParsing() {
 }
 
 func (sm *SrvMgr) consumeInputBuffer() {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("panic in consumeInputBuffer: %v\n", r)
+		}
+	}()
 
 	for {
 		select {
@@ -1080,6 +1085,11 @@ func (sm *SrvMgr) consumeInputBuffer() {
 
 // 查询协程
 func (sm *SrvMgr) queryLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("panic in queryLoop: %v\n", r)
+		}
+	}()
 
 	if !sm.autoOpenSerial {
 		return
@@ -1156,6 +1166,11 @@ func (sm *SrvMgr) registerDefaultHandlers() {
 
 // 串口管理器主循环
 func (sm *SrvMgr) serialManager() {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("panic in serialManager: %v\n", r)
+		}
+	}()
 	for {
 		select {
 		case cmd := <-sm.serialCmdChan:
@@ -1319,6 +1334,11 @@ func (sm *SrvMgr) handleSerialCommand(cmd *SerialCommand) {
 
 // 串口数据分发器
 func (sm *SrvMgr) serialDataDispatcher() {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("panic in serialDataDispatcher: %v\n", r)
+		}
+	}()
 	for {
 		select {
 		case msg := <-sm.serialDataChan:
@@ -1340,7 +1360,15 @@ func (sm *SrvMgr) dispatchSerialData(msg *SerialDataMessage) {
 
 	// 并发执行所有处理器
 	for _, handler := range handlers {
-		go handler(msg)
+		h := handler
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("panic in serial handler: %v\n", r)
+				}
+			}()
+			h(msg)
+		}()
 	}
 
 }

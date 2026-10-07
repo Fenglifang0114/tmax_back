@@ -24,7 +24,7 @@ func TestNewDbScaleRec(t *testing.T) {
 				t.Errorf("NewDbScaleRec() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
+			if got == nil || tt.want == nil || got.dbName != tt.want.dbName {
 				t.Errorf("NewDbScaleRec() = %v, want %v", got, tt.want)
 			}
 		})

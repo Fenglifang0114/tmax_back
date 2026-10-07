@@ -107,10 +107,15 @@ func (p *Port) Receive() ([]byte, error) {
 
 // ReceiveTimeout 实现带有超时的接收方法
 func (p *Port) ReceiveTimeout(timeout time.Duration) ([]byte, error) {
-	receiveChan := make(chan []byte)
-	errorChan := make(chan error)
+	receiveChan := make(chan []byte, 1)
+	errorChan := make(chan error, 1)
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic in ReceiveTimeout goroutine: %v", r)
+			}
+		}()
 		data, err := p.Receive()
 		if err != nil {
 			errorChan <- err
@@ -119,12 +124,15 @@ func (p *Port) ReceiveTimeout(timeout time.Duration) ([]byte, error) {
 		receiveChan <- data
 	}()
 
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	select {
 	case data := <-receiveChan:
 		return data, nil
 	case err := <-errorChan:
 		return nil, err
-	case <-time.After(timeout):
+	case <-timer.C:
 		return nil, fmt.Errorf("receive timeout")
 	}
 }
@@ -229,6 +237,11 @@ func (u *Upgrader) enterUpgradeMode(expectedBootResp []byte, wrongBootResp []byt
 
 	// 发送任务
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic in enterUpgradeMode sender: %v", r)
+			}
+		}()
 		defer closeDone() // 使用once确保只关闭一次
 
 		ticker := time.NewTicker(10 * time.Millisecond)
@@ -251,6 +264,11 @@ func (u *Upgrader) enterUpgradeMode(expectedBootResp []byte, wrongBootResp []byt
 
 	// 接收任务 - 修改部分
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic in enterUpgradeMode receiver: %v", r)
+			}
+		}()
 		var buffer []byte // 用于存储累积的响应数据
 
 		for {
@@ -299,6 +317,9 @@ func (u *Upgrader) enterUpgradeMode(expectedBootResp []byte, wrongBootResp []byt
 		}
 	}()
 
+	upgradeTimer := time.NewTimer(timeout)
+	defer upgradeTimer.Stop()
+
 	// 等待成功、超时或停止
 	select {
 	case <-successChan:
@@ -307,7 +328,7 @@ func (u *Upgrader) enterUpgradeMode(expectedBootResp []byte, wrongBootResp []byt
 	case err := <-failChan:
 		log.Println("进入升级模式失败: ", err)
 		return err
-	case <-time.After(timeout):
+	case <-upgradeTimer.C:
 		log.Println("进入升级模式超时")
 		closeDone()
 		return fmt.Errorf("enter upgrade mode timeout,fail")
@@ -818,6 +839,11 @@ func (u *Upgrader) startCommunication() {
 
 // sender 发送goroutine
 func (u *Upgrader) sender() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("panic in upgrader sender: %v", r)
+		}
+	}()
 	defer u.wg.Done()
 	for {
 		select {
@@ -835,6 +861,11 @@ func (u *Upgrader) sender() {
 
 // receiver 接收goroutine（使用环形缓冲区）
 func (u *Upgrader) receiver() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("panic in upgrader receiver: %v", r)
+		}
+	}()
 	defer u.wg.Done()
 	u.port.SetReadTimeout(100 * time.Millisecond)
 	for {

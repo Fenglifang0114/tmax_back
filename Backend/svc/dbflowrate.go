@@ -1,14 +1,16 @@
 package svc
 
 import (
+	"errors"
 	"time"
+	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type DbFlowRate struct {
 	dbName string
+	db     *gorm.DB
 }
 
 // FlowRate 流速头表格
@@ -31,7 +33,6 @@ type FlowRateHeader struct {
 }
 
 // FlowRateDetail 流速明细表
-
 type FlowRateDetail struct {
 	RecId int `gorm:"primaryKey;autoincrement;not null"`
 	// 头Id
@@ -51,78 +52,74 @@ type FlowRateList struct {
 
 // 初始化数据库连接和表结构
 func NewFlowRateInfo(dbName string) (*DbFlowRate, error) {
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
 		return nil, err
 	}
-	// 自动迁移表结构
 	if err := db.AutoMigrate(
 		&FlowRateHeader{},
 		&FlowRateDetail{},
 	); err != nil {
+		l.Log.Errorf("failed to migrate database of flow rate: %v", err)
 		return nil, err
 	}
 
-	return &DbFlowRate{dbName: dbName}, nil
+	return &DbFlowRate{dbName: dbName, db: db}, nil
+}
+
+func (d *DbFlowRate) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
 }
 
 // 新增头
 func (d *DbFlowRate) AddFlowRateHeader(header *FlowRateHeader) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	if err := db.Create(header).Error; err != nil {
-		return err
-	}
-	return nil
+	return d.db.Create(header).Error
 }
 
 // 新增明细表
 func (d *DbFlowRate) AddFlowRateDetail(detail *FlowRateDetail) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	if err := db.Create(detail).Error; err != nil {
-		return err
-	}
-	return nil
+	return d.db.Create(detail).Error
 }
 
 // 找出头表中最大的recid
 func (d *DbFlowRate) FindMaxRecId() (int, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return 0, err
-
+	if d == nil || d.db == nil {
+		return 0, errors.New("db connection is nil")
 	}
 	var header FlowRateHeader
-	if err := db.Last(&header).Error; err != nil {
+	if err := d.db.Last(&header).Error; err != nil {
 		return 0, err
 	}
 	return header.RecId, nil
-
 }
 
 // 获取所有的流速信息
-// 获取所有的流速信息
 func (d *DbFlowRate) GetAllFlowRateLists() ([]FlowRateList, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 	var headers []FlowRateHeader
-	// 查询所有流速头信息
-	if err := db.Find(&headers).Error; err != nil {
+	if err := d.db.Find(&headers).Error; err != nil {
 		return nil, err
 	}
 
 	var flowRateLists []FlowRateList
 	for _, header := range headers {
 		var details []FlowRateDetail
-		// 查询每个流速头对应的明细信息
-		if err := db.Where("header_id = ?", header.RecId).Find(&details).Error; err != nil {
+		if err := d.db.Where("header_id = ?", header.RecId).Find(&details).Error; err != nil {
 			return nil, err
 		}
 		flowRateLists = append(flowRateLists, FlowRateList{

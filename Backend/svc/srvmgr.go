@@ -255,6 +255,11 @@ func NewSrvMgr(scaleMgr *ScaleMgr, quitch chan bool) *SrvMgr {
 	l.Log.Debugf("sm.autoOpenSerial:%v\n", sm.autoOpenSerial)
 	if sm.autoOpenSerial {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					l.Log.Errorf("panic in autoOpenSerial goroutine: %v", r)
+				}
+			}()
 			time.Sleep(1 * time.Second) // 等待系统初始化完成
 			if err := sm.OpenSerial(); err != nil {
 				fmt.Printf("自动打开串口失败: %v\n", err)

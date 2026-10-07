@@ -395,6 +395,11 @@ func NewBluetoothConnection(address string, pickerFn picker.PickerFunc, isDefaul
 
 // connectLoop 连接循环，保持蓝牙连接
 func (bt *TBluetooth) connectLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Log.Errorf("panic in connectLoop: %v", r)
+		}
+	}()
 	bt.wg.Add(1)
 	defer bt.wg.Done()
 
@@ -547,6 +552,11 @@ func (bt *TBluetooth) setupDevice(device bluetooth.Device) error {
 	// 订阅通知
 	bt.wg.Add(1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Log.Errorf("panic in bluetooth notification subscriber: %v", r)
+			}
+		}()
 		defer bt.wg.Done()
 
 		err := bt.readChar.EnableNotifications(func(data []byte) {
@@ -679,10 +689,12 @@ func (bt *TBluetooth) Close() error {
 	}
 
 	// 6. 等待断开确认
+	disconnectTimer := time.NewTimer(3 * time.Second)
 	select {
 	case <-bt.disconnectChan:
+		disconnectTimer.Stop()
 		log.Log.Info("收到断开确认")
-	case <-time.After(3 * time.Second):
+	case <-disconnectTimer.C:
 		log.Log.Warn("断开确认超时")
 	}
 
@@ -791,10 +803,17 @@ func (bt *TBluetooth) Write(data []byte) error {
 
 // read 从蓝牙读取数据（处理通知通道）
 func (bt *TBluetooth) read() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Log.Errorf("panic in bluetooth read: %v", r)
+		}
+	}()
 	bt.wg.Add(1)
 	defer bt.wg.Done()
 
 	packCnt := 0
+	readTicker := time.NewTicker(10 * time.Millisecond)
+	defer readTicker.Stop()
 
 	for {
 		select {
@@ -808,7 +827,7 @@ func (bt *TBluetooth) read() {
 		case <-bt.quitChan:
 			return
 
-		case <-time.After(10 * time.Millisecond):
+		case <-readTicker.C:
 			// 定期处理队列，即使没有新数据
 			bt.processQueue(&packCnt)
 		}

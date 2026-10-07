@@ -1,15 +1,16 @@
 package svc
 
 import (
+	"errors"
 	"time"
 	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type DbPluRec struct {
 	dbName string
+	db     *gorm.DB
 }
 
 type PluRec struct {
@@ -20,88 +21,50 @@ type PluRec struct {
 }
 
 func NewDbPluRec(dbName string) (*DbPluRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
-		l.Log.Debug("failed to connect database")
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
+		return nil, err
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
 	if err = db.AutoMigrate(&PluRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
+		l.Log.Errorf("failed to migrate database of plu rec: %v", err)
 	}
-	return &DbPluRec{dbName: dbName}, nil
+	return &DbPluRec{dbName: dbName, db: db}, nil
+}
+
+func (d *DbPluRec) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
 }
 
 func (d *DbPluRec) GetPluRecsList() ([]PluRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&PluRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
-	}
-
-	// 读取内容
 	var recs []PluRec
-	db.Find(&recs)
+	d.db.Find(&recs)
 	return recs, nil
 }
 
 func (d *DbPluRec) GetPluRecs(md5Str string) ([]PluRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&PluRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
-	}
-
-	// 读取内容
 	var recs []PluRec
-	db.Where("md5=?", md5Str).Order("created_at desc").First(&recs)
+	d.db.Where("md5=?", md5Str).Order("created_at desc").First(&recs)
 	return recs, nil
 }
 
 func (d *DbPluRec) InsertPluRec(rec PluRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	tx := db.Create(&rec)
+	tx := d.db.Create(&rec)
 	if tx.Error != nil {
 		return tx.Error
 	}

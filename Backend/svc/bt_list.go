@@ -121,6 +121,9 @@ func GetBtList() (string, error) {
 	// 启动一个goroutine来执行扫描
 	go func() {
 		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("panic in bluetooth scan goroutine: %v\n", r)
+			}
 			// 确保扫描停止
 			adapter.StopScan()
 			// 给系统一点时间停止扫描
@@ -246,11 +249,14 @@ func GetBtListWithStopControl() (string, context.CancelFunc, error) {
 	scanErr := make(chan error, 1)
 
 	go func() {
-		defer close(scanDone)
 		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("panic in bluetooth scan with stop goroutine: %v\n", r)
+			}
 			adapter.StopScan()
 			time.Sleep(100 * time.Millisecond)
 		}()
+		defer close(scanDone)
 
 		err := adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
 			select {
@@ -311,6 +317,11 @@ func GetBtListWithStopControl() (string, context.CancelFunc, error) {
 
 	// 在另一个goroutine中等待扫描完成
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("panic in bluetooth scan waiter goroutine: %v\n", r)
+			}
+		}()
 		select {
 		case <-scanDone:
 			// 扫描完成
@@ -406,6 +417,11 @@ func GetBtListWithTimeout(timeout time.Duration) (string, error) {
 
 	// 等待超时
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("panic in bluetooth scan timeout waiter goroutine: %v\n", r)
+			}
+		}()
 		<-ctx.Done()
 		adapter.StopScan()
 		// 等待扫描回调完成

@@ -7,12 +7,12 @@ import (
 	"time"
 	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type DbScaleRec struct {
 	dbName string
+	db     *gorm.DB
 }
 
 type ScaleRec struct {
@@ -113,47 +113,35 @@ func ConvertToDBColumnName(columnName string) string {
 }
 
 func NewDbScaleRec(dbName string) (*DbScaleRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
-		l.Log.Debug("failed to connect database")
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
+		return nil, err
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
 	if err = db.AutoMigrate(&ScaleRec{}, &ScaleRecDetail{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
+		l.Log.Errorf("failed to migrate database of scale connection: %v", err)
 	}
-	return &DbScaleRec{dbName: dbName}, nil
+	return &DbScaleRec{dbName: dbName, db: db}, nil
+}
+
+func (d *DbScaleRec) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
 }
 
 // GetScaleWgtRecsList 从数据库中分批获取数据
 func (d *DbScaleRec) GetScaleWgtRecsList(model string, sn string, name string, offset int, limit int) ([]ScaleRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect database: %w", err)
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect database: %w", err)
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&ScaleRec{}); err != nil {
-		return nil, fmt.Errorf("failed to migrate database of scale connection: %w", err)
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 
-	// 读取内容
 	var recs []ScaleRec
-	result := db.Where("scale_model = ?", model).
+	result := d.db.Where("scale_model = ?", model).
 		Where("scale_sn = ?", sn).
 		Offset(offset).
 		Limit(limit).
@@ -167,26 +155,12 @@ func (d *DbScaleRec) GetScaleWgtRecsList(model string, sn string, name string, o
 }
 
 func (d *DbScaleRec) GetScaleRecsList(model string, sn string, name string, page string, pageSize string, columnName string, direction string) ([]ScaleRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 
-	// Migrate the schema
-	if err = db.AutoMigrate(&ScaleRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
-	}
-
-	// 分页参数
 	pageInt := 1
+	var err error
 	if page != "" {
 		pageInt, err = strconv.Atoi(page)
 		if err != nil {
@@ -204,14 +178,11 @@ func (d *DbScaleRec) GetScaleRecsList(model string, sn string, name string, page
 
 	offset := (pageInt - 1) * pageSizeInt
 
-	// 读取内容
 	var recs []ScaleRec
-	query := db.Where("scale_model = ?", model).Where("scale_sn = ?", sn)
+	query := d.db.Where("scale_model = ?", model).Where("scale_sn = ?", sn)
 	dbColumnName := ConvertToDBColumnName(columnName)
 
-	// 排序
 	if dbColumnName != "" && direction != "" {
-		// 将 direction 转换为 SQL 标准格式
 		sqlDirection := ""
 		switch direction {
 		case "ascending":
@@ -219,37 +190,27 @@ func (d *DbScaleRec) GetScaleRecsList(model string, sn string, name string, page
 		case "descending":
 			sqlDirection = "DESC"
 		default:
-			// 如果 direction 不是 "ascending" 或 "descending"，默认为 "ASC"
 			sqlDirection = "ASC"
 		}
 
-		// 处理按照 id 排序的情况
 		if dbColumnName == "rec_id" {
-			// 使用 CAST 函数将 id 转换为整数进行排序
 			query = query.Order("CAST(" + dbColumnName + " AS INTEGER) " + sqlDirection)
 		} else {
 			query = query.Order(dbColumnName + " " + sqlDirection)
 		}
-
 	}
 
-	// 统计满足条件的数据总数
 	var total int64
 	if err := query.Model(&ScaleRec{}).Count(&total).Error; err != nil {
 		return nil, err
 	}
 
-	// 计算总页数
 	totalPages := (int(total) + pageSizeInt - 1) / pageSizeInt
-
-	// 判断页码是否超出范围
 	if pageInt > totalPages {
 		return []ScaleRec{}, nil
 	}
 
-	// 分页
 	query = query.Offset(offset).Limit(pageSizeInt)
-
 	if err := query.Find(&recs).Error; err != nil {
 		return nil, err
 	}
@@ -258,44 +219,19 @@ func (d *DbScaleRec) GetScaleRecsList(model string, sn string, name string, page
 }
 
 func (d *DbScaleRec) GetScaleRecs(model string, sn string, start int, quantity int) ([]ScaleRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&ScaleRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
-	}
-
-	// 读取内容
 	var recs []ScaleRec
-	db.Limit(quantity).Offset(start).Where("scale_model=?", model).Where("scale_sn=?", sn).Find(&recs)
+	d.db.Limit(quantity).Offset(start).Where("scale_model=?", model).Where("scale_sn=?", sn).Find(&recs)
 	return recs, nil
 }
 
 func (d *DbScaleRec) InsertScaleRec(rec ScaleRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	tx := db.Create(&rec)
+	tx := d.db.Create(&rec)
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -303,19 +239,10 @@ func (d *DbScaleRec) InsertScaleRec(rec ScaleRec) error {
 }
 
 func (d *DbScaleRec) UpdateScaleRec(rec ScaleRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	rowAffected := db.Model(&rec).Where("rec_id=?", rec.RecId).Updates(&rec).RowsAffected
+	rowAffected := d.db.Model(&rec).Where("rec_id=?", rec.RecId).Updates(&rec).RowsAffected
 	if rowAffected == 0 {
 		return errors.New("@UpdateScaleRec failed, mybe record not existing")
 	}
@@ -323,119 +250,57 @@ func (d *DbScaleRec) UpdateScaleRec(rec ScaleRec) error {
 }
 
 func (d *DbScaleRec) DeleteScaleRec(id uint) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
 	var rec ScaleRec
 	rec.RecId = id
-	db.Where("rec_id=?", id).Delete((&rec))
+	d.db.Where("rec_id=?", id).Delete((&rec))
 	return nil
 }
 
 func (d *DbScaleRec) DeleteAllScaleRec(scaleModel string, scaleSn string) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	// err = db.Migrator().DropTable(&ScaleRec{})
-	// if err != nil {
-	// 	l.Log.Debug("failed to drop database")
-	// }
-
 	var rec ScaleRec
-	db.Where("scale_model = ? AND scale_sn = ?", scaleModel, scaleSn).Delete(&rec)
-
+	d.db.Where("scale_model = ? AND scale_sn = ?", scaleModel, scaleSn).Delete(&rec)
 	return nil
 }
 
 func (d *DbScaleRec) NewDeleteAllRec() error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
+	}
+	err := d.db.Exec("DELETE FROM scale_recs").Error
 	if err != nil {
 		return err
 	}
-	sqlDB, err := db.DB()
+	err = d.db.Exec("DELETE FROM scale_rec_details").Error
 	if err != nil {
 		return err
 	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	// 使用 DELETE 语句清空 ScaleRec 表
-	err = db.Exec("DELETE FROM scale_recs").Error
-	if err != nil {
-		return err
-	}
-
-	// 使用 DELETE 语句清空 ScaleRecDetail 表
-	err = db.Exec("DELETE FROM scale_rec_details").Error
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
-
-// PagedScaleRecInfo 封装分页结果和总数据量
 
 type PagedScaleRecInfo struct {
 	ScaleRecInfos []ScaleRecInfo `json:"scale_rec_infos"`
 	TotalCount    int64          `json:"total_count"`
 }
 
-// 分页获取数据
 func (d *DbScaleRec) NewGetScaleRecsList(page int, pageSize int, columnName string, direction string) (PagedScaleRecInfo, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return PagedScaleRecInfo{}, fmt.Errorf("failed to connect database: %w", err)
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return PagedScaleRecInfo{}, fmt.Errorf("failed to connect database: %w", err)
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return PagedScaleRecInfo{}, errors.New("db connection is nil")
 	}
 
-	// Migrate the schema
-	if err = db.AutoMigrate(&ScaleRec{}, &ScaleRecDetail{}); err != nil {
-		return PagedScaleRecInfo{}, fmt.Errorf("failed to migrate database of scale connection: %w", err)
-	}
-
-	// 分页参数
 	pageInt := page
 	pageSizeInt := pageSize
-
 	offset := (pageInt - 1) * pageSizeInt
 
-	// 构建查询
-	var query = db.Model(&ScaleRec{})
+	var query = d.db.Model(&ScaleRec{})
 	dbColumnName := ConvertToDBColumnName(columnName)
 
-	// 排序
 	if dbColumnName != "" && direction != "" {
-		// 将 direction 转换为 SQL 标准格式
 		sqlDirection := ""
 		switch direction {
 		case "ascending":
@@ -443,29 +308,22 @@ func (d *DbScaleRec) NewGetScaleRecsList(page int, pageSize int, columnName stri
 		case "descending":
 			sqlDirection = "DESC"
 		default:
-			// 如果 direction 不是 "ascending" 或 "descending"，默认为 "ASC"
 			sqlDirection = "ASC"
 		}
 
-		// 处理按照 id 排序的情况
 		if dbColumnName == "rec_id" {
-			// 使用 CAST 函数将 id 转换为整数进行排序
 			query = query.Order("CAST(" + dbColumnName + " AS INTEGER) " + sqlDirection)
 		} else {
 			query = query.Order(dbColumnName + " " + sqlDirection)
 		}
 	}
 
-	// 统计满足条件的数据总数
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return PagedScaleRecInfo{}, err
 	}
 
-	// 计算总页数
 	totalPages := (int(total) + pageSizeInt - 1) / pageSizeInt
-
-	// 判断页码是否超出范围
 	if pageInt > totalPages {
 		return PagedScaleRecInfo{
 			ScaleRecInfos: []ScaleRecInfo{},
@@ -473,22 +331,16 @@ func (d *DbScaleRec) NewGetScaleRecsList(page int, pageSize int, columnName stri
 		}, nil
 	}
 
-	// 分页
 	query = query.Offset(offset).Limit(pageSizeInt)
-
-	// 读取 ScaleRec 数据
 	var scaleRecs []ScaleRec
 	if err := query.Find(&scaleRecs).Error; err != nil {
 		return PagedScaleRecInfo{}, err
 	}
 
-	// 初始化结果切片
 	var scaleRecInfos []ScaleRecInfo
-
 	for _, rec := range scaleRecs {
-		// 每次循环创建一个新的 details 切片
 		var details []ScaleRecDetail
-		if err := db.Where("head_id = ?", rec.RecId).Find(&details).Error; err != nil {
+		if err := d.db.Where("head_id = ?", rec.RecId).Find(&details).Error; err != nil {
 			return PagedScaleRecInfo{}, err
 		}
 		scaleRecInfos = append(scaleRecInfos, ScaleRecInfo{
@@ -504,117 +356,61 @@ func (d *DbScaleRec) NewGetScaleRecsList(page int, pageSize int, columnName stri
 }
 
 func (d *DbScaleRec) NewInsertScaleRec(rec ScaleRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 	rec.ScaleModel = ""
 	rec.ScaleName = ""
 	rec.ScaleSn = ""
 
-	tx := db.Create(&rec)
+	tx := d.db.Create(&rec)
 	if tx.Error != nil {
 		return tx.Error
 	}
 	return nil
 }
 
-// 找出最大的rec_id
 func (d *DbScaleRec) FindMaxRecId() (uint, error) {
-	var err error
+	if d == nil || d.db == nil {
+		return 0, errors.New("db connection is nil")
+	}
 	var maxRecId uint
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
+	if err := d.db.Model(&ScaleRec{}).Select("MAX(rec_id)").Scan(&maxRecId).Error; err != nil {
 		return 0, err
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return 0, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	//找出最大的rec_id
-	if err := db.Model(&ScaleRec{}).Select("MAX(rec_id)").Scan(&maxRecId).Error; err != nil {
-		return 0, err
-	}
-	//如果没有数据，返回0
 	if maxRecId == 0 {
 		return 0, nil
 	}
 	return maxRecId, nil
 }
 
-// 插入明细
 func (d *DbScaleRec) InsertScaleRecDetail(rec ScaleRecDetail) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	tx := db.Create(&rec)
+	tx := d.db.Create(&rec)
 	if tx.Error != nil {
 		return tx.Error
 	}
 	return nil
-
 }
 
-// 导出所有的记录，包括头和明细数据
-// GetAllScaleRecInfos 查出所有记录，包括头和明细信息
 func (d *DbScaleRec) GetAllScaleRecInfos() ([]ScaleRecInfo, error) {
-	var err error
-	// 打开数据库连接
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect database: %w", err)
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect database: %w", err)
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 
-	// 自动迁移表结构
-	if err = db.AutoMigrate(&ScaleRec{}, &ScaleRecDetail{}); err != nil {
-		return nil, fmt.Errorf("failed to migrate database of scale connection: %w", err)
-	}
-
-	// 读取所有 ScaleRec 数据
 	var scaleRecs []ScaleRec
-	if err := db.Find(&scaleRecs).Error; err != nil {
+	if err := d.db.Find(&scaleRecs).Error; err != nil {
 		return nil, fmt.Errorf("failed to query scale records: %w", err)
 	}
 
-	// 初始化结果切片
 	var scaleRecInfos []ScaleRecInfo
-
-	// 遍历每个 ScaleRec，查找对应的 ScaleRecDetail
 	for _, rec := range scaleRecs {
 		var details []ScaleRecDetail
-		// 根据 HeadId 查找对应的明细记录
-		if err := db.Where("head_id = ?", rec.RecId).Find(&details).Error; err != nil {
+		if err := d.db.Where("head_id = ?", rec.RecId).Find(&details).Error; err != nil {
 			return nil, fmt.Errorf("failed to query scale record details: %w", err)
 		}
-		// 将头信息和明细信息封装到 ScaleRecInfo 结构体
 		scaleRecInfos = append(scaleRecInfos, ScaleRecInfo{
 			Header:  rec,
 			Details: details,
