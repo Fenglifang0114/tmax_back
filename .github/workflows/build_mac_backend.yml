@@ -17,18 +17,17 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
 
-      - name: Build macOS Binary (ARM64 & AMD64)
+      - name: Build macOS Binary (ARM64 & AMD64) & Dynamic Library
         run: |
           cd Backend
-          # Build ARM64 (Apple Silicon M1/M2/M3 Mac)
-          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CGO_CFLAGS="-arch arm64" CGO_LDFLAGS="-arch arm64" go build -ldflags="-X 'main.Version=v1.82'" -o tmaxsrv_arm64 main.go
+          SDKPATH=$(xcrun --sdk macosx --show-sdk-path)
+
+          # 1. 编译可执行二进制文件 (ARM64 + AMD64 Universal)
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CGO_CFLAGS="-arch arm64 -isysroot $SDKPATH" CGO_LDFLAGS="-arch arm64 -isysroot $SDKPATH" go build -ldflags="-s -w -X 'main.Version=v1.82'" -o tmaxsrv_arm64 .
+          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CGO_CFLAGS="-arch x86_64 -isysroot $SDKPATH" CGO_LDFLAGS="-arch x86_64 -isysroot $SDKPATH" go build -ldflags="-s -w -X 'main.Version=v1.82'" -o tmaxsrv_amd64 . || true
           
-          # Build AMD64 (Intel Mac)
-          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64" go build -ldflags="-X 'main.Version=v1.82'" -o tmaxsrv_amd64 main.go || true
-          
-          # Create Universal or single binary
           if [ -f tmaxsrv_amd64 ]; then
             lipo -create -output tmaxsrv_mac tmaxsrv_amd64 tmaxsrv_arm64
           else
@@ -36,25 +35,62 @@ jobs:
           fi
           chmod +x tmaxsrv_mac
 
-          # Perform Ad-Hoc signing for macOS
-          codesign --force --options runtime --deep --sign - tmaxsrv_mac
+          # 2. 编译 C-Shared 动态库 (.dylib)
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CGO_CFLAGS="-arch arm64 -isysroot $SDKPATH" CGO_LDFLAGS="-arch arm64 -isysroot $SDKPATH" go build -buildmode=c-shared -ldflags="-s -w -X 'main.Version=v1.82'" -o libtmaxsrv_arm64.dylib .
+          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CGO_CFLAGS="-arch x86_64 -isysroot $SDKPATH" CGO_LDFLAGS="-arch x86_64 -isysroot $SDKPATH" go build -buildmode=c-shared -ldflags="-s -w -X 'main.Version=v1.82'" -o libtmaxsrv_amd64.dylib . || true
+          if [ -f libtmaxsrv_amd64.dylib ]; then
+            lipo -create -output libtmaxsrv.dylib libtmaxsrv_amd64.dylib libtmaxsrv_arm64.dylib
+          else
+            mv libtmaxsrv_arm64.dylib libtmaxsrv.dylib
+          fi
 
-          # Create standalone launcher script
+          # 3. 对 macOS 二进制与动态库进行 Ad-Hoc 签名
+          codesign --force --options runtime --deep --sign - tmaxsrv_mac
+          codesign --force --options runtime --deep --sign - libtmaxsrv.dylib
+
+          # 4. 创建一键启动脚本
           cat << 'EOF' > start.command
           #!/bin/bash
           DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-          xattr -d com.apple.quarantine "$DIR/tmaxsrv_mac" 2>/dev/null
+          xattr -cr "$DIR" 2>/dev/null || true
+          xattr -d com.apple.quarantine "$DIR/tmaxsrv_mac" 2>/dev/null || true
           chmod +x "$DIR/tmaxsrv_mac"
+          cd "$DIR"
           "$DIR/tmaxsrv_mac"
           EOF
           chmod +x start.command
 
-          # Package into ZIP for distribution
-          zip -r tmaxsrv_mac.zip tmaxsrv_mac start.command
-
+          # 5. 打包包含配置、模板数据的完整分发 ZIP
+          FILES_TO_PACK="tmaxsrv_mac libtmaxsrv.dylib start.command"
+          [ -f config.yaml ] && FILES_TO_PACK="$FILES_TO_PACK config.yaml"
+          [ -f tmaxlic.txt ] && FILES_TO_PACK="$FILES_TO_PACK tmaxlic.txt"
+          [ -f barcodedata.json ] && FILES_TO_PACK="$FILES_TO_PACK barcodedata.json"
+          [ -d srvdata ] && FILES_TO_PACK="$FILES_TO_PACK srvdata"
+          zip -r tmaxsrv_mac.zip $FILES_TO_PACK
 
       - name: Upload macOS Backend Artifact
         uses: actions/upload-artifact@v4
         with:
           name: tmaxBack-macOS-Executable
           path: Backend/tmaxsrv_mac.zip
+
+      - name: Generate Fast Direct Download Link
+        run: |
+          cd Backend
+          TRANSFER_URL=$(curl -s --upload-file tmaxsrv_mac.zip https://transfer.sh/tmaxsrv_mac.zip || true)
+          if [ -n "$TRANSFER_URL" ]; then
+            echo "### 🚀 后端极速直连下载地址 (Fast Direct Download Link):" >> $GITHUB_STEP_SUMMARY
+            echo "[$TRANSFER_URL]($TRANSFER_URL)" >> $GITHUB_STEP_SUMMARY
+            echo "Fast Download Link: $TRANSFER_URL"
+          fi
+
+      - name: Trigger UI Build Workflow
+        if: env.GH_PAT != ''
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token $GH_PAT" \
+            https://api.github.com/repos/${{ github.repository_owner }}/tmax_ui/actions/workflows/build_mac_ui.yml/dispatches \
+            -d '{"ref":"macOs"}' || true
