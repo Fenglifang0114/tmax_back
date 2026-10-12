@@ -166,7 +166,7 @@ func NewUpgrader(c *Scale, port serial.Port) *Upgrader {
 
 // PerformUpgrader 运行升级流程
 func (u *Upgrader) PerformUpgrader(srecData []byte, expectedBootResp []byte, wrongBootResp []byte) (*ScaleRespMsg, error) {
-	// defer u.stopCommunication()
+	defer u.stopCommunication()
 
 	var respMsg *ScaleRespMsg
 	respOk := &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: "ok", ScaleId: u.scale.Id}
@@ -847,6 +847,14 @@ func (u *Upgrader) receiver() {
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					continue // 忽略超时错误
 				}
+				if strings.Contains(strings.ToLower(err.Error()), "timeout") {
+					continue // 忽略串口超时错误
+				}
+				select {
+				case <-u.stopChan:
+					return
+				default:
+				}
 				log.Printf("Error reading scale: %v", err)
 				u.errorChan <- err
 				return // 遇到非超时错误直接退出
@@ -865,13 +873,15 @@ func (u *Upgrader) receiver() {
 }
 
 // stopCommunication 停止通信goroutines
-// func (u *Upgrader) stopCommunication() {
-// 	close(u.stopChan)
-// 	u.wg.Wait()
-// 	close(u.sendChan)
-// 	close(u.receiveChan)
-// 	close(u.errorChan)
-// }
+func (u *Upgrader) stopCommunication() {
+	select {
+	case <-u.stopChan:
+		return
+	default:
+		close(u.stopChan)
+	}
+	u.wg.Wait()
+}
 
 func CalculateCRC32MPEG2(data []byte) uint32 {
 	crc := mcrc.NewCRC(mcrc.Crc32MPEG2)

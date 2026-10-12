@@ -2,16 +2,21 @@ package prnfmt
 
 import (
 	"bufio"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
+	"tmaxsrv/comm"
 
 	"github.com/xuri/excelize/v2"
 )
+
+//go:embed varTable.json
+var defaultVarTableBytes []byte
 
 type VarStruct struct {
 	id       uint16
@@ -75,18 +80,39 @@ func GetFormatLines(fileNames string) ([]string, bool) {
 }
 
 func ReadTableFromFile(tableFilePath string) ScaleVarOrder {
-	jsonFile, err := os.Open(tableFilePath)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer jsonFile.Close()
-	jsonfile, _ := ioutil.ReadAll(jsonFile)
-	// fmt.Print(byteValue)
 	var tempTable ScaleVarOrder
-	err = json.Unmarshal(jsonfile, &tempTable)
-	if err != nil {
-		log.Panic(err)
+
+	// 1. 尝试从指定路径或候选路径读取文件
+	candidatePaths := []string{
+		tableFilePath,
+		comm.GetStaticFilePath("varTable.json"),
+		filepath.Join(comm.GetSrvDataPath(), "varTable.json"),
+		filepath.Join(comm.GetExePath(), "srvdata", "varTable.json"),
+		filepath.Join(comm.GetExePath(), "varTable.json"),
+		filepath.Join("srvdata", "varTable.json"),
+		filepath.Join("..", "srvdata", "varTable.json"),
 	}
+
+	for _, p := range candidatePaths {
+		if p == "" {
+			continue
+		}
+		if data, err := os.ReadFile(p); err == nil && len(data) > 0 {
+			if err := json.Unmarshal(data, &tempTable); err == nil && len(tempTable.ScaleVarTable) > 0 {
+				return tempTable
+			}
+		}
+	}
+
+	// 2. 如果磁盘文件均无法加载，使用编译期嵌入的内置默认变量表兜底，保证服务永不因缺文件而崩溃
+	if len(defaultVarTableBytes) > 0 {
+		if err := json.Unmarshal(defaultVarTableBytes, &tempTable); err == nil {
+			log.Printf("[prnfmt] Notice: varTable.json not found on disk, using embedded default varTable")
+			return tempTable
+		}
+	}
+
+	log.Printf("[prnfmt] Warning: Failed to load varTable from disk and embedded fallback (candidate paths: %v)", candidatePaths)
 	return tempTable
 }
 
@@ -95,9 +121,17 @@ func getBarCodeTypeId(filename string, tempLan string, tempType string) string {
 	ret := ""
 	f, err := excelize.OpenFile(filename)
 	if err != nil {
+		baseName := filepath.Base(filename)
+		altPath := comm.GetStaticFilePath(baseName)
+		if altPath != "" && altPath != filename {
+			f, err = excelize.OpenFile(altPath)
+		}
+	}
+	if err != nil {
 		fmt.Println("读取excel文件出错", err.Error())
 		return ret
 	}
+	defer f.Close()
 	sheet1 := f.GetSheetName(0)
 	rows, err := f.GetRows(sheet1)
 	if err != nil {

@@ -749,12 +749,13 @@ func (p btListedNotifier) Handle() {
 	// Do something for this event
 	log.Log.Debug("Handle btListedNotifier called")
 	// Do something with this event
-	btList, _ := GetBtList()
+	btList, err := GetBtList()
+	if err != nil {
+		log.Log.Errorf("GetBtList failed: %v", err)
+	}
 	var btListStr string
-	var err error
 	if btListStr, err = json.MarshalToString(btList); err != nil {
-		fmt.Printf("%v\n", err)
-		// TODO: error handling
+		log.Log.Errorf("json.MarshalToString btList failed: %v", err)
 	}
 	// send ports list back to requestee
 	mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_BT_LIST, MsgBody: btListStr}

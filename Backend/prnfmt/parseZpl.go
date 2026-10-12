@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -261,7 +262,7 @@ func ParseZplBarcode(tempRowArr []string, dataBuffer *bytes.Buffer, lastvarPos i
 		readable = "N"
 	}
 
-	excelPath := path + "\\" + ZPL_BAR_CODE_EXCEL
+	excelPath := filepath.Join(path, ZPL_BAR_CODE_EXCEL)
 	codeType := getBarCodeTypeId(excelPath, ZPL_LANGUAGE_ZPL, tempRowArr[6])
 	if codeType == "" {
 		codeType = tempRowArr[6]

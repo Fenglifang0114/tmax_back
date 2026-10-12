@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -300,7 +301,7 @@ func ParsEscBarcode(tempRowArr []string, dataBuffer *bytes.Buffer, lastvarPos in
 	dataBuffer.WriteString(tempRowArr[7]) // 旋转
 
 	dataBuffer.WriteString(escInnerLineSep)
-	path = path + "\\" + ESC_BAR_CODE_EXCEL
+	path = filepath.Join(path, ESC_BAR_CODE_EXCEL)
 	codeType := getBarCodeTypeId(path, LANGUAGE_ESC, tempRowArr[6])
 	dataBuffer.WriteString(codeType)
 	dataBuffer.WriteString(escInnerLineSep)

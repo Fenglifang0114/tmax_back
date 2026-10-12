@@ -83,9 +83,11 @@ func (c *Scale) TmaxUpdateFirmware(srecName string) (*ScaleRespMsg, error) {
 		pickerFn = picker.GetPickerFn(c.ScaleCat)
 	}
 
-	//关闭串口，将串口让出去
+	//关闭串口，将串口让出去，延时等待操作系统（尤其是 macOS / Linux 驱动层）彻底释放串口设备句柄
+	time.Sleep(300 * time.Millisecond)
 	resp, _ = c.ProcessUpdate(srecName)
 	// 开启串口，将串口重新初始化
+	time.Sleep(200 * time.Millisecond)
 	if c.MySerial, err = NewSerial(c.Pcnf, pickerFn, true); err != nil {
 		log.Printf("重新初始化串口失败: %v", err)
 	}

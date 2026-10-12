@@ -1,0 +1,289 @@
+{
+    "var": [
+        {
+            "valuename": "Date",
+            "id": 1,
+            "comment": "date"
+        },
+        {
+            "valuename": "Time",
+            "id": 2,
+            "comment": "time"
+        },
+        {
+            "valuename": "NO.",
+            "id": 7,
+            "comment": "NO"
+        },
+        {
+            "valuename": "Gross",
+            "id": 8,
+            "comment": ""
+        },
+        {
+            "valuename": "Tare",
+            "id": 9,
+            "comment": ""
+        },
+        {
+            "valuename": "Net",
+            "id": 10,
+            "comment": ""
+        },
+        {
+            "valuename": "PCS",
+            "id": 11,
+            "comment": "pcs"
+        },
+        {
+            "valuename": "UnitWeight",
+            "id": 12,
+            "comment": "UnitWeight"
+        },
+        {
+            "valuename": "Percent",
+            "id": 13,
+            "comment": "percent"
+        },
+        {
+            "valuename": "TotalWeight",
+            "id": 14,
+            "comment": "total weight"
+        },
+        {
+            "valuename": "WeightUnit",
+            "id": 15,
+            "comment": ""
+        },
+        {
+            "valuename": "TotalCount",
+            "id": 16,
+            "comment": "total count"
+        },
+		{
+            "valuename": "DATE",
+            "id": 17,
+            "comment": "date_from_scale"
+        },
+        {
+            "valuename": "TIME",
+            "id": 18,
+            "comment": "time_from_scale"
+        },
+		{
+            "valuename": "U.WGT",
+            "id": 19,
+            "comment": "Universal weight"
+        },
+        {
+            "valuename": "U.WU",
+            "id": 20,
+            "comment": "Universal weight unit"
+        },
+        {
+            "valuename": "TotalPcs",
+            "id": 21,
+            "comment": "Total Pcs"
+        },
+        {
+            "valuename": "NO._P",
+            "id": 30,
+            "comment": "NO._P"
+        },
+        {
+            "valuename": "Header1_P",
+            "id": 31,
+            "comment": "Header1_P"
+        },
+        {
+            "valuename": "Header2_P",
+            "id": 32,
+            "comment": "Header2_P"
+        },
+        {
+            "valuename": "Header3_P",
+            "id": 33,
+            "comment": "Header3_P"
+        },
+        {
+            "valuename": "Footer1_P",
+            "id": 34,
+            "comment": "Footer1_P"
+        },
+        {
+            "valuename": "Footer2_P",
+            "id": 35,
+            "comment": "Footer2_P"
+        },
+        {
+            "valuename": "Footer3_P",
+            "id": 36,
+            "comment": "Footer3_P"
+        },
+        {
+            "valuename": "PLU_ID_P",
+            "id": 37,
+            "comment": "PLU_ID_P"
+        },
+        {
+            "valuename": "PLU_Name_P",
+            "id": 38,
+            "comment": "PLU_Name_P"
+        },
+        {
+            "valuename": "OrderNumber_P",
+            "id": 39,
+            "comment": "OrderNumber_P"
+        },
+        {
+            "valuename": "UnitPrice_P",
+            "id": 40,
+            "comment": "UnitPrice_P"
+        },
+        {
+            "valuename": "PriceUnit_P",
+            "id": 41,
+            "comment": "PriceUnit_P"
+        },
+        {
+            "valuename": "Price_P",
+            "id": 42,
+            "comment": "Price_P"
+        },
+        {
+            "valuename": "Weight_Pcs_P",
+            "id": 43,
+            "comment": "Weight_Pcs_P"
+        },
+        {
+            "valuename": "Tare_P",
+            "id": 44,
+            "comment": "Tare_P"
+        },              
+        {
+            "valuename": "TaxType1_P",
+            "id": 46,
+            "comment": "TaxType1_P"
+        },
+        {
+            "valuename": "TaxType2_P",
+            "id": 47,
+            "comment": "TaxType2_P"
+        },
+        {
+            "valuename": "TaxType3_P",
+            "id": 48,
+            "comment": "TaxType3_P"
+        },
+        {
+            "valuename": "TaxBase1_P",
+            "id": 49,
+            "comment": "TaxBase1_P"
+        },
+        {
+            "valuename": "TaxBase2_P",
+            "id": 50,
+            "comment": "TaxBase2_P"
+        },
+        {
+            "valuename": "TaxBase3_P",
+            "id": 51,
+            "comment": "TaxBase3_P"
+        },
+        {
+            "valuename": "TaxAmount1_P",
+            "id": 52,
+            "comment": "TaxAmount1_P"
+        },
+        {
+            "valuename": "TaxAmount2_P",
+            "id": 53,
+            "comment": "TaxAmount2_P"
+        },
+        {
+            "valuename": "TaxAmount3_P",
+            "id": 54,
+            "comment": "TaxAmount3_P"
+        },
+        {
+            "valuename": "TaxModel_P",
+            "id": 55,
+            "comment": "TaxModel_P"
+        },
+        {
+            "valuename": "TotalTaxAmount_P",
+            "id": 56,
+            "comment": "TotalTaxAmount_P"
+        },
+        {
+            "valuename": "PaymentAmount_P",
+            "id": 57,
+            "comment": "PaymentAmount_P"
+        },
+        {
+            "valuename": "ChangeAmount_P",
+            "id": 58,
+            "comment": "ChangeAmount_P"
+        },
+        {
+            "valuename": "Subtotal_P",
+            "id": 59,
+            "comment": "Subtotal_P"
+        },
+		{
+            "valuename": "Currency_P",
+            "id": 60,
+            "comment": "Currency_P"
+        },
+		{
+            "valuename": "Unit_P",
+            "id": 61,
+            "comment": "Unit_P"
+        },
+		{
+            "valuename": "CopyTimes_P",
+            "id": 62,
+            "comment": "CopyTimes_P"
+        },
+		{
+            "valuename": "ModelName_P",
+            "id": 63,
+            "comment": "ModelName_P"
+        },
+		{
+            "valuename": "ScaleName_P",
+            "id": 64,
+            "comment": "ScaleName_P"
+        },
+		{
+            "valuename": "TaxName_P",
+            "id": 65,
+            "comment": "TaxName_P"
+        },
+		{
+            "valuename": "SettleAccountTimes_P",
+            "id": 66,
+            "comment": "SettleAccountTimes_P"
+        },		
+        {
+            "valuename": "PLU_Tax_P",
+            "id": 67,
+            "comment": "PLU_Tax_P"
+        },
+        {
+            "valuename": "TotalNoTax_P",
+            "id": 68,
+            "comment": "TotalNoTax_P"
+        },			
+        {
+            "valuename": "StartLoop",
+            "id": 254,
+            "comment": "Start Loop"
+        },
+        {
+            "valuename": "EndLoop",
+            "id": 255,
+            "comment": "End Loop"
+        }
+    ]
+}

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -319,7 +320,7 @@ func ParsEplBarcode(tempRowArr []string, dataBuffer *bytes.Buffer, lastvarPos in
 	dataBuffer.WriteString(tempRowArr[7]) // 旋转
 
 	dataBuffer.WriteString(innerLineSep)
-	path = path + "\\" + EPL_BAR_CODE_EXCEL
+	path = filepath.Join(path, EPL_BAR_CODE_EXCEL)
 	codeType := getBarCodeTypeId(path, EPL_LANGUAGE_EPL, tempRowArr[6])
 	dataBuffer.WriteString(codeType)
 	dataBuffer.WriteString(innerLineSep)

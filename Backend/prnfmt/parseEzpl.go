@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -255,7 +256,7 @@ func ParsEzplBarcode(tempRowArr []string, dataBuffer *bytes.Buffer, lastvarPos i
 
 	dataBuffer.WriteString(EZPL_BARCODE_HEAD)
 	// t (Type)
-	barcodeExcelPath := path + "\\" + EPL_BAR_CODE_EXCEL
+	barcodeExcelPath := filepath.Join(path, EPL_BAR_CODE_EXCEL)
 	codeType := getBarCodeTypeId(barcodeExcelPath, "EZPL", tempRowArr[6]) // Need EZPL column in excel
 	if codeType == "" {
 		codeType = "Q" // Default to Code39 or similar for EZPL

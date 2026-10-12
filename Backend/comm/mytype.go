@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 type ScaleCat int
@@ -373,12 +374,81 @@ func GetServicePath() string {
 	return filepath.Join(myPath, COMM_SERVICE)
 }
 
+var darwinStaticSyncOnce sync.Once
+
+func syncStaticFilesToDarwinSrvData(targetDir string) {
+	darwinStaticSyncOnce.Do(func() {
+		staticFiles := []string{"varTable.json", "barcode.xlsx", "T-MAXeeprom.xlsx", "autoscan.json", "config.json"}
+		exeDir := GetExePath()
+		parentDir := filepath.Dir(strings.TrimRight(exeDir, "/\\"))
+
+		for _, f := range staticFiles {
+			dest := filepath.Join(targetDir, f)
+			if _, err := os.Stat(dest); err == nil {
+				continue // 目标文件已存在
+			}
+			sources := []string{
+				filepath.Join(parentDir, "Resources", SRV_DATA_PATH, f),
+				filepath.Join(parentDir, "Resources", f),
+				filepath.Join(parentDir, "MacOS", SRV_DATA_PATH, f),
+				filepath.Join(exeDir, SRV_DATA_PATH, f),
+				filepath.Join(exeDir, f),
+				filepath.Join(SRV_DATA_PATH, f),
+				filepath.Join("..", SRV_DATA_PATH, f),
+			}
+			for _, src := range sources {
+				if data, err := os.ReadFile(src); err == nil && len(data) > 0 {
+					_ = os.WriteFile(dest, data, 0644)
+					break
+				}
+			}
+		}
+	})
+}
+
+// GetStaticFilePath 查找静态配置文件（如 varTable.json, barcode.xlsx 等）
+func GetStaticFilePath(fileName string) string {
+	targetInSrv := filepath.Join(GetSrvDataPath(), fileName)
+	if _, err := os.Stat(targetInSrv); err == nil {
+		return targetInSrv
+	}
+
+	exeDir := GetExePath()
+	candidates := []string{
+		filepath.Join(exeDir, SRV_DATA_PATH, fileName),
+		filepath.Join(exeDir, fileName),
+		filepath.Join(SRV_DATA_PATH, fileName),
+		filepath.Join("..", SRV_DATA_PATH, fileName),
+	}
+
+	if runtime.GOOS == "darwin" {
+		parentDir := filepath.Dir(strings.TrimRight(exeDir, "/\\"))
+		candidates = append(candidates,
+			filepath.Join(parentDir, "Resources", SRV_DATA_PATH, fileName),
+			filepath.Join(parentDir, "Resources", fileName),
+			filepath.Join(parentDir, "MacOS", SRV_DATA_PATH, fileName),
+		)
+	}
+
+	for _, cand := range candidates {
+		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
+			if data, err := os.ReadFile(cand); err == nil {
+				_ = os.WriteFile(targetInSrv, data, 0644)
+			}
+			return cand
+		}
+	}
+
+	return targetInSrv
+}
+
 func GetSrvDataPath() string {
 	if runtime.GOOS == "darwin" {
 		home, err := os.UserHomeDir()
 		if err == nil && home != "" {
 			p := filepath.Join(home, "Library", "Application Support", "tmax", SRV_DATA_PATH)
 			if err := os.MkdirAll(p, 0755); err == nil {
+				syncStaticFilesToDarwinSrvData(p)
 				return p
 			}
 		}

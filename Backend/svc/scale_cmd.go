@@ -2,8 +2,10 @@ package svc
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -31,8 +33,18 @@ func (c *Scale) UpdateFirmware(name string) (*ScaleRespMsg, error) {
 	output := make(chan string)
 	done := make(chan error)
 	bootCommanderPath := m.GetExePath()
-	print(bootCommanderPath)
-	bootCommanderPath = filepath.Join(bootCommanderPath, "BootCommander.exe")
+	exeName := "BootCommander.exe"
+	if runtime.GOOS != "windows" {
+		exeName = "BootCommander"
+	}
+	bootCommanderPath = filepath.Join(bootCommanderPath, exeName)
+	if _, err := os.Stat(bootCommanderPath); err != nil {
+		l.Log.Errorf("BootCommander not found: %s", bootCommanderPath)
+		if c.MySerial, err = NewSerial(c.Pcnf, pickerFn, true); err != nil {
+			l.Log.Error(err.Error())
+		}
+		return &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: fmt.Sprintf("fail,%s not found", exeName), ScaleId: c.Id}, nil
+	}
 	go util.RunCommand(output, done, bootCommanderPath, "-t=xcp_rs232", "-d="+c.Pcnf.DevPath, "-b=57600", name)
 
 	isFinish := false
@@ -111,9 +123,18 @@ func (c *Scale) UpdateFirmwareOld(name string) (*ScaleRespMsg, error) {
 	output := make(chan string)
 	done := make(chan error)
 	bootCommanderPath := m.GetExePath()
-	print(bootCommanderPath)
-	bootCommanderPath = filepath.Join(bootCommanderPath, "oldBoot") //在oldBoot文件夹下
-	bootCommanderPath = filepath.Join(bootCommanderPath, "BootCommander.exe")
+	exeName := "BootCommander.exe"
+	if runtime.GOOS != "windows" {
+		exeName = "BootCommander"
+	}
+	bootCommanderPath = filepath.Join(bootCommanderPath, "oldBoot", exeName)
+	if _, err := os.Stat(bootCommanderPath); err != nil {
+		l.Log.Errorf("BootCommander not found: %s", bootCommanderPath)
+		if c.MySerial, err = NewSerial(c.Pcnf, pickerFn, true); err != nil {
+			l.Log.Error(err.Error())
+		}
+		return &ScaleRespMsg{MsgType: m.UPDATE_FIRMWARE_RESP, MsgBody: fmt.Sprintf("fail,%s not found", exeName), ScaleId: c.Id}, nil
+	}
 	go util.RunCommand(output, done, bootCommanderPath, "-t=xcp_rs232", "-d="+c.Pcnf.DevPath, "-b=57600", name)
 	var err error
 	isFinish := false

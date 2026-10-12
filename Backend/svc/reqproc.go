@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
@@ -30,6 +31,21 @@ var handlers map[SReqType]reqProcFun
 func procToScaleReq(s *Scale, req SRequest) {
 	var resp *ScaleRespMsg
 	var err error
+
+	defer func() {
+		if r := recover(); r != nil {
+			l.Log.Errorf("Panic in procToScaleReq (req: %s): %v\nstack: %s", req.Req, r, string(debug.Stack()))
+			resp = &ScaleRespMsg{
+				MsgType: GetResVsResp(req.Req),
+				MsgBody: fmt.Sprintf("error: internal panic: %v", r),
+				ScaleId: s.Id,
+			}
+			result, _ := json.Marshal(resp)
+			if s.client != nil {
+				s.client.sendCh <- result
+			}
+		}
+	}()
 
 	handler, ok := handlers[req.Req]
 	if !ok {

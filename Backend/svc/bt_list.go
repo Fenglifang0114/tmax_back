@@ -25,19 +25,16 @@ var (
 	currentScanCancel context.CancelFunc
 )
 
-// 初始化适配器（只调用一次）
+// 初始化适配器
 func initAdapter() (*bluetooth.Adapter, error) {
-	adapterOnce.Do(func() {
+	if btAdapter == nil {
 		btAdapter = bluetooth.DefaultAdapter
-		if err := btAdapter.Enable(); err != nil {
-			adapterInitErr = fmt.Errorf("enable adapter failed: %w", err)
-			return
-		}
-		fmt.Println("蓝牙适配器初始化成功")
-	})
+	}
 
-	if adapterInitErr != nil {
-		return nil, adapterInitErr
+	if err := btAdapter.Enable(); err != nil {
+		if !isAlreadyEnabled(err) {
+			return nil, fmt.Errorf("enable adapter failed: %w", err)
+		}
 	}
 
 	return btAdapter, nil
@@ -50,7 +47,7 @@ func resetAdapter() {
 
 	if btAdapter != nil {
 		// 停止扫描
-		btAdapter.StopScan()
+		_ = btAdapter.StopScan()
 		isScanning = false
 
 		// 取消当前扫描上下文
@@ -60,7 +57,7 @@ func resetAdapter() {
 		}
 
 		// 等待一段时间确保扫描完全停止
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -95,9 +92,10 @@ func GetBtList() (string, error) {
 
 	devices := make(map[string]bluetooth.ScanResult)
 	var results []bluetooth.ScanResult
+	var resultsMu sync.Mutex
 
-	// 创建扫描上下文（用于超时控制）
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	// 创建扫描上下文（用于超时控制，默认10秒）
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 	// 保存当前扫描上下文，以便外部可以取消
 	scanMutex.Lock()
@@ -108,87 +106,68 @@ func GetBtList() (string, error) {
 	currentScanCancel = cancel
 	scanMutex.Unlock()
 
-	// 确保结束时取消上下文
 	defer cancel()
 
 	fmt.Println("正在扫描蓝牙设备（最多10秒）...")
 	start := time.Now()
 
-	// 使用通道来同步扫描完成
-	scanCompleted := make(chan bool, 1)
-	scanError := make(chan error, 1)
-
-	// 启动一个goroutine来执行扫描
+	// 启动 watchdog 协程：当超时或取消时，主动调用 adapter.StopScan() 打断阻塞
+	stopWatchdog := make(chan struct{})
 	go func() {
-		defer func() {
-			// 确保扫描停止
-			adapter.StopScan()
-			// 给系统一点时间停止扫描
-			time.Sleep(100 * time.Millisecond)
-		}()
+		select {
+		case <-ctx.Done():
+			_ = adapter.StopScan()
+		case <-stopWatchdog:
+		}
+	}()
+	defer close(stopWatchdog)
 
-		// 开始扫描
-		err := adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
-			// 检查上下文是否已取消
-			select {
-			case <-ctx.Done():
-				// 超时或被取消，停止扫描
-				adapter.StopScan()
-				return
-			default:
-			}
-
-			address := device.Address.String()
-			name := device.LocalName()
-
-			if existing, exists := devices[address]; exists {
-				if existing.LocalName() == "" && name != "" {
-					devices[address] = device
-					for i, d := range results {
-						if d.Address.String() == address {
-							results[i] = device
-							break
-						}
-					}
-				}
-			} else {
-				devices[address] = device
-				results = append(results, device)
-
-				if name == "" {
-					name = "No Name"
-				}
-
-				elapsed := time.Since(start).Seconds()
-				fmt.Printf("[%.1fs] 发现设备: %s, 名称: %s, RSSI: %d\n",
-					elapsed, address, name, device.RSSI)
-			}
-		})
-
-		if err != nil {
-			scanError <- fmt.Errorf("启动扫描失败: %v", err)
+	// 开始阻塞扫描
+	err = adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
+		select {
+		case <-ctx.Done():
+			_ = adapter.StopScan()
 			return
+		default:
 		}
 
-		// 等待上下文完成（超时或被取消）
-		<-ctx.Done()
+		address := device.Address.String()
+		name := device.LocalName()
 
-		// 扫描完成
-		scanCompleted <- true
-	}()
+		resultsMu.Lock()
+		defer resultsMu.Unlock()
 
-	// 等待扫描完成或出错
-	select {
-	case <-scanCompleted:
-		// 扫描正常完成
-		fmt.Printf("\n扫描完成，发现 %d 个设备\n", len(results))
-	case err := <-scanError:
-		// 扫描出错
-		return "", err
-	case <-ctx.Done():
-		// 超时
-		fmt.Printf("\n扫描超时，已发现 %d 个设备\n", len(results))
+		if existing, exists := devices[address]; exists {
+			if existing.LocalName() == "" && name != "" {
+				devices[address] = device
+				for i, d := range results {
+					if d.Address.String() == address {
+						results[i] = device
+						break
+					}
+				}
+			}
+		} else {
+			devices[address] = device
+			results = append(results, device)
+
+			if name == "" {
+				name = "No Name"
+			}
+
+			elapsed := time.Since(start).Seconds()
+			fmt.Printf("[%.1fs] 发现设备: %s, 名称: %s, RSSI: %d\n",
+				elapsed, address, name, device.RSSI)
+		}
+	})
+
+	_ = adapter.StopScan()
+
+	if err != nil && ctx.Err() == nil {
+		return "", fmt.Errorf("启动扫描失败: %v", err)
 	}
+
+	fmt.Printf("\n扫描完成，发现 %d 个设备\n", len(results))
 
 	// 转换为 JSON
 	btInfoList := make([]BtInfoList, 0)
@@ -232,6 +211,7 @@ func GetBtListWithStopControl() (string, context.CancelFunc, error) {
 
 	devices := make(map[string]bluetooth.ScanResult)
 	var results []bluetooth.ScanResult
+	var resultsMu sync.Mutex
 
 	adapter, err := initAdapter()
 	if err != nil {
@@ -248,20 +228,33 @@ func GetBtListWithStopControl() (string, context.CancelFunc, error) {
 	go func() {
 		defer close(scanDone)
 		defer func() {
-			adapter.StopScan()
+			_ = adapter.StopScan()
 			time.Sleep(100 * time.Millisecond)
 		}()
+
+		stopWatchdog := make(chan struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				_ = adapter.StopScan()
+			case <-stopWatchdog:
+			}
+		}()
+		defer close(stopWatchdog)
 
 		err := adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
 			select {
 			case <-ctx.Done():
-				adapter.StopScan()
+				_ = adapter.StopScan()
 				return
 			default:
 			}
 
 			address := device.Address.String()
 			name := device.LocalName()
+
+			resultsMu.Lock()
+			defer resultsMu.Unlock()
 
 			if existing, exists := devices[address]; exists {
 				if existing.LocalName() == "" && name != "" {
@@ -287,12 +280,10 @@ func GetBtListWithStopControl() (string, context.CancelFunc, error) {
 			}
 		})
 
-		if err != nil {
+		if err != nil && ctx.Err() == nil {
 			scanErr <- err
 			return
 		}
-
-		<-ctx.Done()
 	}()
 
 	// 返回取消函数，让调用者可以随时停止扫描

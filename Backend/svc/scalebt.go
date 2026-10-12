@@ -122,10 +122,14 @@ func (bm *BluetoothManager) EnableAdapter() error {
 
 // 检查错误是否是"already enabled"
 func isAlreadyEnabled(err error) bool {
-	errStr := err.Error()
+	if err == nil {
+		return true
+	}
+	errStr := strings.ToLower(err.Error())
 	return strings.Contains(errStr, "already") ||
 		strings.Contains(errStr, "already enabled") ||
-		strings.Contains(errStr, "already in use")
+		strings.Contains(errStr, "already in use") ||
+		strings.Contains(errStr, "already calling enable function")
 }
 
 // 扫描设备（统一管理）
@@ -172,10 +176,20 @@ func (bm *BluetoothManager) doScan(timeout time.Duration) ([]bluetooth.ScanResul
 	log.Log.Info("正在扫描蓝牙设备...")
 	start := time.Now()
 
+	stopWatchdog := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = bm.adapter.StopScan()
+		case <-stopWatchdog:
+		}
+	}()
+	defer close(stopWatchdog)
+
 	err := bm.adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
 		select {
 		case <-ctx.Done():
-			adapter.StopScan()
+			_ = adapter.StopScan()
 			return
 		default:
 		}
@@ -206,11 +220,12 @@ func (bm *BluetoothManager) doScan(timeout time.Duration) ([]bluetooth.ScanResul
 		}
 	})
 
-	if err != nil {
+	_ = bm.adapter.StopScan()
+
+	if err != nil && ctx.Err() == nil {
 		return nil, fmt.Errorf("扫描失败: %v", err)
 	}
 
-	bm.adapter.StopScan()
 	log.Log.Infof("扫描完成，发现 %d 个设备", len(results))
 	return results, nil
 }
@@ -459,8 +474,12 @@ func (bt *TBluetooth) connectDevice() error {
 			})
 
 			if err != nil {
-				// 重要：返回错误，不要继续执行
-				return fmt.Errorf("未找到设备 %s: %v", bt.deviceAddress, err)
+				log.Log.Warnf("直接连接设备 %s 失败 (%v)，将尝试扫描后重试连接...", bt.deviceAddress, err)
+				if attempt < maxRetries {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				return fmt.Errorf("直接连接设备 %s 失败: %v", bt.deviceAddress, err)
 			}
 
 		} else {
@@ -599,10 +618,20 @@ func (bt *TBluetooth) scanDevicesWithAdapter(adapter *bluetooth.Adapter, timeout
 	log.Log.Info("正在扫描蓝牙设备...")
 	start := time.Now()
 
+	stopWatchdog := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = adapter.StopScan()
+		case <-stopWatchdog:
+		}
+	}()
+	defer close(stopWatchdog)
+
 	err := adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
 		select {
 		case <-ctx.Done():
-			adapter.StopScan()
+			_ = adapter.StopScan()
 			return
 		default:
 		}
@@ -633,11 +662,12 @@ func (bt *TBluetooth) scanDevicesWithAdapter(adapter *bluetooth.Adapter, timeout
 		}
 	})
 
-	if err != nil {
+	_ = adapter.StopScan()
+
+	if err != nil && ctx.Err() == nil {
 		return nil, fmt.Errorf("扫描失败: %v", err)
 	}
 
-	adapter.StopScan()
 	log.Log.Infof("扫描完成，发现 %d 个设备", len(results))
 	return results, nil
 }

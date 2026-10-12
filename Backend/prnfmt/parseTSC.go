@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -386,7 +387,7 @@ func ParseTscBarcode(tempRowArr []string, dataBuffer *bytes.Buffer, lastvarPos i
 	dataBuffer.WriteString(innerLineSep)
 	dataBuffer.WriteString(strconv.Itoa(y)) // Y
 	dataBuffer.WriteString(innerLineSep)
-	path = path + "\\" + TSPL_BAR_CODE_EXCEL
+	path = filepath.Join(path, TSPL_BAR_CODE_EXCEL)
 	codeType := getBarCodeTypeId(path, TSPL_LANGUAGE_TSPL, tempRowArr[6])
 
 	dataBuffer.WriteString(TSPL_TEXT_SEP)

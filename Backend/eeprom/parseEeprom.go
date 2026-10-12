@@ -30,17 +30,9 @@ const (
 )
 
 func getExcelPath() string {
-
-	// file, _ := exec.LookPath(os.Args[0])
-	// path, _ := filepath.Abs(file)
-	// index := strings.LastIndex(path, string(os.PathSeparator))
-	// currentPath := path[:index]
-	// currentPath = filepath.Join(currentPath, comm.SRV_DATA_PATH)
-	currentPath := comm.GetSrvDataPath()                 //20241107
-	currentPath = currentPath + "\\" + TMAX_EEPROM_EXCEL // 获取EEprom值
+	currentPath := comm.GetStaticFilePath(TMAX_EEPROM_EXCEL)
 	fmt.Println(currentPath)
 	return currentPath
-
 }
 
 // 读取excel文件
@@ -53,6 +45,7 @@ func GetExcelData() (EepromStruct, bool) {
 		fmt.Println("read excel file error", err.Error())
 		return fieldData, false
 	}
+	defer f.Close()
 	sheet1 := f.GetSheetName(0)
 	rows, err := f.GetRows(sheet1)
 	if err != nil {
