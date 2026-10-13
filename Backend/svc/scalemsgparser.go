@@ -1622,7 +1622,12 @@ func handleRevDetailTailResp(scaleId int64, data []byte) (ScaleRespMsg, int) {
 	// }
 	list := mSrvMgr.scales[scaleId].detailInfo
 	recStr, _ := json.MarshalToString(list)
-	mSrvMgr.recvScaleMgrMsgSrv <- &SrvMgrRespMsg{MsgType: SCALE_MGR_RESP_DETAIL_LIST, MsgBody: recStr, ScaleId: scaleId}
+	if mSrvMgr.recvScaleMgrMsgSrv != nil {
+		mSrvMgr.recvScaleMgrMsgSrv <- &SrvMgrRespMsg{MsgType: SCALE_MGR_RESP_DETAIL_LIST, MsgBody: recStr, ScaleId: scaleId}
+	}
+	if RetailInProcEnabled() {
+		go RetailInProcOnDetail(scaleId, list)
+	}
 
 	return ScaleRespMsg{ScaleId: scaleId, MsgType: m.REV_DETAIl_TAIL_RESP, MsgBody: "ok"}, len(data)
 	// TODO: Implement function

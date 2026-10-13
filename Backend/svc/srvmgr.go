@@ -727,6 +727,9 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 		}
 	case REQ_SEND_TO_SRV1:
 		jsonStr := req.ReqData
+		if RetailInProcHandleUiReq(jsonStr) {
+			break
+		}
 		sendToSrv1.Trigger(scaleMgr.srvMgr, jsonStr)
 
 	case REQ_SET_DO_SERVICE_ACTION:
@@ -2027,6 +2030,10 @@ func (p doServiceActionNotifier) Handle(mgr *SrvMgr, payload ReqDoServiceAction)
 	// }
 
 	srvName, srvPath := getServiceNameAndPath(payload.ServiceId)
+	if status, ok := RetailInProcServiceAction(payload.ServiceId); ok {
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_DO_SERVICE_ACTION, MsgBody: status}
+		return
+	}
 	if srvPath == "" {
 		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_DO_SERVICE_ACTION, MsgBody: msgStr}
 		return
