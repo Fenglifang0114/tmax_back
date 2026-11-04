@@ -5,12 +5,12 @@ import (
 	"time"
 	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type DbProductRec struct {
 	dbName string
+	db     *gorm.DB
 }
 
 type ProductRec struct {
@@ -45,51 +45,44 @@ type FieldDisplaySetting struct {
 }
 
 func NewDbProductRec(dbName string) (*DbProductRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&ProductRec{}, &FieldDisplaySetting{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
+		return nil, err
 	}
 
-	// // 更新Enabled为null的记录，设置UpdatedAt与创建时间一致，CreateBy和UpdateBy为1，Enabled为true
+	if err = db.AutoMigrate(&ProductRec{}, &FieldDisplaySetting{}); err != nil {
+		l.Log.Errorf("failed to migrate database of scale connection: %v", err)
+	}
+
 	db.Exec("UPDATE product_recs SET updated_at = created_at, create_by = 1, update_by = 1, enabled = true WHERE updated_at IS NULL")
 
-	return &DbProductRec{dbName: dbName}, nil
+	return &DbProductRec{
+		dbName: dbName,
+		db:     db,
+	}, nil
 }
+
+func (d *DbProductRec) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
+}
+
+
 
 // CheckPluExist 检查PLU是否存在
 func (d *DbProductRec) CheckPluExist(id int, plu string) (bool, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&ProductRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of product")
+	if d == nil || d.db == nil {
+		return false, errors.New("db connection is nil")
 	}
 
-	//查找Plu信息
 	var recs []ProductRec
-	query := db.Model(&ProductRec{}).Where("plu = ?", plu)
+	query := d.db.Model(&ProductRec{}).Where("plu = ?", plu)
 	query.Find(&recs)
 	if id == 0 {
 		return len(recs) > 0, nil
@@ -100,61 +93,26 @@ func (d *DbProductRec) CheckPluExist(id int, plu string) (bool, error) {
 	}
 
 	return false, nil
-
 }
 
 func (d *DbProductRec) GetProductRecsList() ([]ProductRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&ProductRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of product")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 
-	// 读取内容
 	var recs []ProductRec
-	db.Find(&recs)
+	d.db.Find(&recs)
 	return recs, nil
 }
 
 // 获取分页数据
 func (d *DbProductRec) GetPluByPage(page, pageSize int, fieldName, direction string, search ProductQuery) ([]ProductRec, int, error) {
-	// fieldName是排序字段，direction是排序方向asc/desc
-	// ProductQuery是查询条件,如果为空,则不进行过滤
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-		return nil, 0, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-		return nil, 0, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&ProductRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of product")
-		return nil, 0, err
+	if d == nil || d.db == nil {
+		return nil, 0, errors.New("db connection is nil")
 	}
 
-	// 构建查询
-	query := db.Model(&ProductRec{})
+	query := d.db.Model(&ProductRec{})
 
-	// 添加搜索条件
 	if search.Plu != "" {
 		query = query.Where("plu LIKE ?", "%"+search.Plu+"%")
 	}
@@ -164,7 +122,6 @@ func (d *DbProductRec) GetPluByPage(page, pageSize int, fieldName, direction str
 	if search.Category != "" {
 		query = query.Where("category LIKE ?", "%"+search.Category+"%")
 	}
-	// Enabled 条件 - 只有当明确查询启用或禁用时才添加条件
 
 	if search.SetEnabled {
 		if search.Enabled {
@@ -172,21 +129,16 @@ func (d *DbProductRec) GetPluByPage(page, pageSize int, fieldName, direction str
 		} else if !search.Enabled {
 			query = query.Where("enabled = ?", false)
 		}
-
 	}
 
-	//查询总数
 	var total int64
 	query.Count(&total)
 
-	// 添加排序
 	if fieldName != "" {
-		// 验证排序方向
 		orderDirection := "ASC"
 		if direction == "desc" {
 			orderDirection = "DESC"
 		}
-		//如果字段是plu,转为数字排序
 		switch fieldName {
 		case "plu":
 			query = query.Order("CAST(plu AS INTEGER) " + orderDirection)
@@ -205,17 +157,12 @@ func (d *DbProductRec) GetPluByPage(page, pageSize int, fieldName, direction str
 		default:
 			query = query.Order(fieldName + " " + orderDirection)
 		}
-
-	} else {
-		// 如果没有指定排序字段，默认按plu从小到大排序
-		// query = query.Order("plu ASC")
 	}
 
-	// 读取内容
 	var recs []ProductRec
 	result := query.Limit(pageSize).Offset((page - 1) * pageSize).Find(&recs)
 	if result.Error != nil {
-		l.Log.Debug("failed to query products")
+		l.Log.Errorf("failed to query products: %v", result.Error)
 		return nil, 0, result.Error
 	}
 
@@ -224,34 +171,12 @@ func (d *DbProductRec) GetPluByPage(page, pageSize int, fieldName, direction str
 
 // 导出产品列表
 func (d *DbProductRec) GetExportProductList(search ProductQuery) ([]ProductRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-		return nil, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&ProductRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of product")
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 
-	//查询总数
-	var total int64
-	db.Model(&ProductRec{}).Count(&total)
+	query := d.db.Model(&ProductRec{})
 
-	// 构建查询
-	query := db.Model(&ProductRec{})
-
-	// 添加搜索条件
 	if search.Plu != "" {
 		query = query.Where("plu LIKE ?", "%"+search.Plu+"%")
 	}
@@ -261,7 +186,6 @@ func (d *DbProductRec) GetExportProductList(search ProductQuery) ([]ProductRec, 
 	if search.Category != "" {
 		query = query.Where("category LIKE ?", "%"+search.Category+"%")
 	}
-	// Enabled 条件 - 只有当明确查询启用或禁用时才添加条件
 
 	if search.SetEnabled {
 		if search.Enabled {
@@ -269,58 +193,33 @@ func (d *DbProductRec) GetExportProductList(search ProductQuery) ([]ProductRec, 
 		} else if !search.Enabled {
 			query = query.Where("enabled = ?", false)
 		}
-
 	}
 
-	// 读取内容
 	var recs []ProductRec
 	result := query.Find(&recs)
 	if result.Error != nil {
-		l.Log.Debug("failed to query products")
+		l.Log.Errorf("failed to query products: %v", result.Error)
 		return nil, result.Error
 	}
 	return recs, nil
 }
 
 func (d *DbProductRec) GetProductRecs(start int, quantity int) ([]ProductRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&ProductRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 
-	// 读取内容
 	var recs []ProductRec
-	db.Limit(quantity).Offset(start).Find(&recs)
+	d.db.Limit(quantity).Offset(start).Find(&recs)
 	return recs, nil
 }
 
 func (d *DbProductRec) InsertProductRec(rec ProductRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
-	tx := db.Create(&rec)
+	tx := d.db.Create(&rec)
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -328,17 +227,8 @@ func (d *DbProductRec) InsertProductRec(rec ProductRec) error {
 }
 
 func (d *DbProductRec) Insert100ProductsWithGorm(products []ProductRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
 	var pluList []string
@@ -346,11 +236,9 @@ func (d *DbProductRec) Insert100ProductsWithGorm(products []ProductRec) error {
 		pluList = append(pluList, p.Plu)
 	}
 
-	// 明确指定模型
 	var existPluList []string
-	err = db.Model(&ProductRec{}).Where("plu IN ?", pluList).Pluck("plu", &existPluList).Error
+	err := d.db.Model(&ProductRec{}).Where("plu IN ?", pluList).Pluck("plu", &existPluList).Error
 	if err != nil {
-
 		return err
 	}
 
@@ -359,7 +247,6 @@ func (d *DbProductRec) Insert100ProductsWithGorm(products []ProductRec) error {
 		existPluSet[plu] = true
 	}
 
-	// 过滤掉已存在的记录
 	filteredProducts := make([]ProductRec, 0, len(products))
 	for _, p := range products {
 		if !existPluSet[p.Plu] {
@@ -371,7 +258,7 @@ func (d *DbProductRec) Insert100ProductsWithGorm(products []ProductRec) error {
 		return nil
 	}
 
-	result := db.Create(filteredProducts)
+	result := d.db.Create(filteredProducts)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -379,26 +266,17 @@ func (d *DbProductRec) Insert100ProductsWithGorm(products []ProductRec) error {
 }
 
 func (d *DbProductRec) UpdateProductRec(rec ProductRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	//找出原来的记录
+
 	var oldRec ProductRec
-	db.Where("rec_id = ?", rec.RecId).First(&oldRec)
+	d.db.Where("rec_id = ?", rec.RecId).First(&oldRec)
 	if oldRec.RecId == 0 {
 		return errors.New("record not found")
 	}
 
-	result := db.Model(&ProductRec{}).Where("rec_id = ?", rec.RecId).Updates(map[string]interface{}{
+	result := d.db.Model(&ProductRec{}).Where("rec_id = ?", rec.RecId).Updates(map[string]interface{}{
 		"plu":          rec.Plu,
 		"product_code": rec.ProductCode,
 		"item_code":    rec.ItemCode,
@@ -430,87 +308,51 @@ func (d *DbProductRec) UpdateProductRec(rec ProductRec) error {
 
 // 获取recId最大的记录，也就是最后一个新增的记录
 func (d *DbProductRec) GetLastProductRec() (ProductRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return ProductRec{}, errors.New("db connection is nil")
 	}
 
 	var lastRec ProductRec
-	db.Order("rec_id desc").First(&lastRec)
+	d.db.Order("rec_id desc").First(&lastRec)
 	return lastRec, nil
 }
 
 // 批量更新数据
 func (d *DbProductRec) BatchUpdateProductRec(multiRec []ProductRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
-	// 开启事务
-	tx := db.Begin()
+	tx := d.db.Begin()
 	for _, rec := range multiRec {
 		var targetRec ProductRec
-		// 先根据plu查找对应的记录，获取其rec_id
 		if err := tx.Where("plu =?", rec.Plu).First(&targetRec).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				// 新增记录
 				if err := tx.Create(&rec).Error; err != nil {
-					// 回滚事务
 					tx.Rollback()
 					return err
 				}
 			} else {
-				// 回滚事务
 				tx.Rollback()
 				return err
 			}
 		} else {
-			// 将当前要处理的rec的rec_id设置为查找到的对应记录的rec_id，以便后续基于rec_id更新
 			rec.RecId = targetRec.RecId
-			// 修改记录，这里使用Save方法会根据主键（rec_id）来更新对应记录，只会更新非零值字段
 			if err := tx.Save(&rec).Error; err != nil {
-				// 回滚事务
 				tx.Rollback()
 				return err
 			}
 		}
 	}
-	// 提交事务
 	return tx.Commit().Error
 }
+
 func (d *DbProductRec) DeleteProductRec(id []int) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
-	// 使用Where方法指定删除条件，然后调用Delete方法删除对应记录
-	result := db.Where("rec_id IN ?", id).Delete(&ProductRec{})
+	result := d.db.Where("rec_id IN ?", id).Delete(&ProductRec{})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -519,21 +361,11 @@ func (d *DbProductRec) DeleteProductRec(id []int) error {
 }
 
 func (d *DbProductRec) DeleteAllProductRecs() error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
-	// 直接使用Delete方法，不指定具体的条件，即可删除所有记录
-	result := db.Exec("DELETE FROM product_recs")
+	result := d.db.Exec("DELETE FROM product_recs")
 	if result.Error != nil {
 		return result.Error
 	}
@@ -543,22 +375,11 @@ func (d *DbProductRec) DeleteAllProductRecs() error {
 
 // 批量启用或者停用PLU
 func (d *DbProductRec) UpdateProductRecEnabled(pluList []int, enabled bool, updateUser string) error {
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
+	}
 
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// 批量更新
-	result := db.Model(&ProductRec{}).Where("rec_id IN ?", pluList).Updates(map[string]interface{}{
-
+	result := d.db.Model(&ProductRec{}).Where("rec_id IN ?", pluList).Updates(map[string]interface{}{
 		"enabled":     enabled,
 		"update_user": updateUser,
 	})
@@ -566,24 +387,15 @@ func (d *DbProductRec) UpdateProductRecEnabled(pluList []int, enabled bool, upda
 		return result.Error
 	}
 	return nil
-
 }
 
 func (d *DbProductRec) GetPluSetting() (map[int]string, error) {
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
+	}
 
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
 	var results []FieldDisplaySetting
-	err = db.Model(&FieldDisplaySetting{}).Order("sequence ASC").Scan(&results).Error
+	err := d.db.Model(&FieldDisplaySetting{}).Order("sequence ASC").Scan(&results).Error
 	if err != nil {
 		return nil, err
 	}
@@ -598,21 +410,11 @@ func (d *DbProductRec) GetPluSetting() (map[int]string, error) {
 
 // 设置字段显示
 func (d *DbProductRec) SetPluSetting(fieldDisplaySetting []string, updateUser string) error {
-
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
-	//删除所有记录
-	result := db.Exec("DELETE FROM field_display_settings")
+	result := d.db.Exec("DELETE FROM field_display_settings")
 	if result.Error != nil {
 		return result.Error
 	}
@@ -621,7 +423,7 @@ func (d *DbProductRec) SetPluSetting(fieldDisplaySetting []string, updateUser st
 		if r == "plu" || r == "productName" {
 			continue
 		}
-		db.Create(&FieldDisplaySetting{
+		d.db.Create(&FieldDisplaySetting{
 			Sequence:  sequence,
 			FieldName: r,
 			UpdatedAt: time.Now(),
@@ -631,5 +433,4 @@ func (d *DbProductRec) SetPluSetting(fieldDisplaySetting []string, updateUser st
 	}
 
 	return nil
-
 }

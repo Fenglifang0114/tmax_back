@@ -253,6 +253,11 @@ func NewSrvMgr(scaleMgr *ScaleMgr, quitch chan bool) *SrvMgr {
 	l.Log.Debugf("sm.autoOpenSerial:%v\n", sm.autoOpenSerial)
 	if sm.autoOpenSerial {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					l.Log.Errorf("panic in autoOpenSerial goroutine: %v", r)
+				}
+			}()
 			time.Sleep(1 * time.Second) // 等待系统初始化完成
 			if err := sm.OpenSerial(); err != nil {
 				fmt.Printf("自动打开串口失败: %v\n", err)
@@ -4419,6 +4424,12 @@ func (p updateSysUserNotifier) Handle(mgr *SrvMgr, payload ReqUpdateSysUser) {
 	if err != nil {
 		l.Log.Error(err)
 		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_UPDATE_SYS_USER, MsgBody: "fail,user not exist"}
+		return
+	}
+
+	if strings.TrimSpace(payload.UpdateUser.UserName) == "" || strings.TrimSpace(payload.UpdateUser.NickName) == "" {
+		l.Log.Warn("UserName or NickName is empty, update rejected")
+		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_UPDATE_SYS_USER, MsgBody: "fail,username empty"}
 		return
 	}
 

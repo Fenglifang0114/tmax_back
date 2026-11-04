@@ -5,12 +5,12 @@ import (
 	"time"
 	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type DbUserRec struct {
 	dbName string
+	db     *gorm.DB
 }
 
 type UserRec struct {
@@ -24,88 +24,50 @@ type UserRec struct {
 }
 
 func NewDbUserRec(dbName string) (*DbUserRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
-		l.Log.Debug("failed to connect database")
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
+		return nil, err
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
 	if err = db.AutoMigrate(&UserRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
+		l.Log.Errorf("failed to migrate database of user: %v", err)
 	}
-	return &DbUserRec{dbName: dbName}, nil
+	return &DbUserRec{dbName: dbName, db: db}, nil
+}
+
+func (d *DbUserRec) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
 }
 
 func (d *DbUserRec) GetUserRecsList() ([]UserRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&UserRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
-	}
-
-	// 读取内容
 	var recs []UserRec
-	db.Find(&recs)
+	d.db.Find(&recs)
 	return recs, nil
 }
 
 func (d *DbUserRec) GetUserRecs(start int, quantity int) ([]UserRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-	if err = db.AutoMigrate(&UserRec{}); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
-	}
-
-	// 读取内容
 	var recs []UserRec
-	db.Limit(quantity).Offset(start).Find(&recs)
+	d.db.Limit(quantity).Offset(start).Find(&recs)
 	return recs, nil
 }
 
 func (d *DbUserRec) InsertUserRec(rec UserRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	tx := db.Create(&rec)
+	tx := d.db.Create(&rec)
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -113,46 +75,21 @@ func (d *DbUserRec) InsertUserRec(rec UserRec) error {
 }
 
 func (d *DbUserRec) UpdateUserRec(rec UserRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 	var oldRec UserRec
-	if err := db.Where("rec_id = ?", rec.RecId).First(&oldRec).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("@UpdateUserRec failed, mybe record not existing")
-		} else {
-			return errors.New("@UpdateUserRec failed, mybe record not existing")
-		}
+	if err := d.db.Where("rec_id = ?", rec.RecId).First(&oldRec).Error; err != nil {
+		return errors.New("@UpdateUserRec failed, maybe record not existing")
 	}
-	db.Save(&rec)
-	return nil
+	return d.db.Save(&rec).Error
 }
 
 func (d *DbUserRec) DeleteUserRec(id uint) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
 	var rec UserRec
 	rec.RecId = id
-	db.Where("rec_id=?", id).Delete((&rec))
-	return nil
+	return d.db.Where("rec_id=?", id).Delete(&rec).Error
 }

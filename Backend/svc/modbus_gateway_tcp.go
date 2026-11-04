@@ -54,6 +54,11 @@ func (s *ModbusTCPServer) Stop() {
 }
 
 func (s *ModbusTCPServer) acceptLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Log.Errorf("panic recovered in ModbusTCPServer acceptLoop: %v", r)
+		}
+	}()
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
@@ -76,6 +81,9 @@ func (s *ModbusTCPServer) acceptLoop() {
 
 func (s *ModbusTCPServer) handleConnection(conn net.Conn) {
 	defer func() {
+		if r := recover(); r != nil {
+			log.Log.Errorf("panic recovered in ModbusTCPServer handleConnection: %v", r)
+		}
 		conn.Close()
 		s.mu.Lock()
 		delete(s.conns, conn)
@@ -147,8 +155,8 @@ func (s *ModbusTCPServer) processBuffer(conn net.Conn, buffer []byte) []byte {
 		responseRtu := RouteModbusRequest(fakeRtuReq, s.info.TargetModbusId, s.srvMgr)
 		
 		if responseRtu != nil {
-			// Strip the 2-byte CRC from RTU response
-			if len(responseRtu) >= 2 {
+			// Strip the 2-byte CRC from RTU response (minimum valid RTU packet: UnitID + PDU[>=1] + 2-byte CRC = 4 bytes)
+			if len(responseRtu) >= 4 {
 				responsePdu := responseRtu[1 : len(responseRtu)-2]
 				
 				// Build TCP response

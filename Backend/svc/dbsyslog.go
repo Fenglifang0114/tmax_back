@@ -1,29 +1,23 @@
 package svc
 
 import (
+	"errors"
 	"time"
 	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type DbSyslogRec struct {
 	dbName string
+	db     *gorm.DB
 }
 
 func NewDbSyslogRec(dbName string) (*DbSyslogRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
+		return nil, err
 	}
 
 	if err = db.AutoMigrate(
@@ -32,10 +26,20 @@ func NewDbSyslogRec(dbName string) (*DbSyslogRec, error) {
 		&ScaleWgtLog{},
 		&SealLog{},
 	); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
+		l.Log.Errorf("failed to migrate database of scale connection: %v", err)
 	}
 
-	return &DbSyslogRec{dbName: dbName}, nil
+	return &DbSyslogRec{dbName: dbName, db: db}, nil
+}
+
+func (d *DbSyslogRec) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
 }
 
 // 操作日志表
@@ -53,9 +57,6 @@ type Syslog struct {
 }
 
 // 标定日志
-// 由于多点标定时，中间不会校准，因此没有标定后的值
-// 因此，不管多点还是单点，都记录一个点的误差值。
-// 单点记录第一个，多点记录最后一个
 type CalibrationLog struct {
 	RecId      int       `gorm:"primaryKey;autoincrement;not null"` // 记录ID
 	Operator   string    // 操作员
@@ -93,289 +94,168 @@ type ScaleWgtLog struct {
 
 // 创建系统操作日志
 func (d *DbSyslogRec) CreateSyslog(log Syslog) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Create(&log).Error; err != nil {
-		l.Log.Debug("failed to create syslog")
+	if err := d.db.Create(&log).Error; err != nil {
+		l.Log.Errorf("failed to create syslog: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 创建标定日志
 func (d *DbSyslogRec) CreateCalibrationLog(log CalibrationLog) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Create(&log).Error; err != nil {
-		l.Log.Debug("failed to create calibration log")
+	if err := d.db.Create(&log).Error; err != nil {
+		l.Log.Errorf("failed to create calibration log: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 创建称重日志
 func (d *DbSyslogRec) CreateScaleLog(log ScaleWgtLog) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Create(&log).Error; err != nil {
-		l.Log.Debug("failed to create scale log")
+	if err := d.db.Create(&log).Error; err != nil {
+		l.Log.Errorf("failed to create scale log: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 删除系统操作日志
 func (d *DbSyslogRec) DeleteSyslog(recIds []int) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Delete(&Syslog{}, "rec_id IN ?", recIds).Error; err != nil {
-		l.Log.Debug("failed to delete syslog")
+	if err := d.db.Delete(&Syslog{}, "rec_id IN ?", recIds).Error; err != nil {
+		l.Log.Errorf("failed to delete syslog: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 删除所有系统操作日志
 func (d *DbSyslogRec) DeleteAllSyslog() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-		return err // 返回错误
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-		return err // 返回错误
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	db.Where("rec_id > ?", 0).Delete(&Syslog{})
-	return nil
+	return d.db.Where("rec_id > ?", 0).Delete(&Syslog{}).Error
 }
 
 // 删除标定日志
 func (d *DbSyslogRec) DeleteCalibrationLog(recIds []int) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Delete(&CalibrationLog{}, "rec_id IN ?", recIds).Error; err != nil {
-		l.Log.Debug("failed to delete calibration log")
+	if err := d.db.Delete(&CalibrationLog{}, "rec_id IN ?", recIds).Error; err != nil {
+		l.Log.Errorf("failed to delete calibration log: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 删除所有标定日志
 func (d *DbSyslogRec) DeleteAllCalibrationLog() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Delete(&CalibrationLog{}).Error; err != nil {
-		l.Log.Debug("failed to delete all calibration log")
+	if err := d.db.Delete(&CalibrationLog{}).Error; err != nil {
+		l.Log.Errorf("failed to delete all calibration log: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 删除称重日志
 func (d *DbSyslogRec) DeleteScaleLog(recIds []int) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Delete(&ScaleWgtLog{}, "rec_id IN ?", recIds).Error; err != nil {
-		l.Log.Debug("failed to delete scale log")
+	if err := d.db.Delete(&ScaleWgtLog{}, "rec_id IN ?", recIds).Error; err != nil {
+		l.Log.Errorf("failed to delete scale log: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 删除所有称重日志
 func (d *DbSyslogRec) DeleteAllScaleLog() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	db.Where("rec_id > ?", 0).Delete(&ScaleWgtLog{})
-
-	return nil
+	return d.db.Where("rec_id > ?", 0).Delete(&ScaleWgtLog{}).Error
 }
 
 // 删除多条系统操作日志
 func (d *DbSyslogRec) DeleteMultiSyslog(recIds []int) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Delete(&Syslog{}, recIds).Error; err != nil {
-		l.Log.Debug("failed to delete multi syslog")
+	if err := d.db.Delete(&Syslog{}, recIds).Error; err != nil {
+		l.Log.Errorf("failed to delete multi syslog: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 删除多条标定日志
 func (d *DbSyslogRec) DeleteMultiCalibrationLog(recIds []int) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Delete(&CalibrationLog{}, recIds).Error; err != nil {
-		l.Log.Debug("failed to delete multi calibration log")
+	if err := d.db.Delete(&CalibrationLog{}, recIds).Error; err != nil {
+		l.Log.Errorf("failed to delete multi calibration log: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 删除多条称重日志
 func (d *DbSyslogRec) DeleteMultiScaleLog(recIds []int) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Delete(&ScaleWgtLog{}, recIds).Error; err != nil {
-		l.Log.Debug("failed to delete multi scale log")
+	if err := d.db.Delete(&ScaleWgtLog{}, recIds).Error; err != nil {
+		l.Log.Errorf("failed to delete multi scale log: %v", err)
+		return err
 	}
 	return nil
 }
 
 // 获取所有系统操作日志
 func (d *DbSyslogRec) GetAllSyslog() ([]Syslog, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
 	var syslogs []Syslog
-	db.Find(&syslogs)
-	return syslogs, nil
+	err := d.db.Find(&syslogs).Error
+	return syslogs, err
 }
 
 // 获取所有标定日志
 func (d *DbSyslogRec) GetAllCalibrationLog() ([]CalibrationLog, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
 	var calibrationLogs []CalibrationLog
-	db.Find(&calibrationLogs)
-	return calibrationLogs, nil
+	err := d.db.Find(&calibrationLogs).Error
+	return calibrationLogs, err
 }
 
 // 获取所有称重日志
 func (d *DbSyslogRec) GetAllScaleLog() ([]ScaleWgtLog, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
 	var scaleLogs []ScaleWgtLog
-	db.Find(&scaleLogs)
-	return scaleLogs, nil
+	err := d.db.Find(&scaleLogs).Error
+	return scaleLogs, err
 }
 
 // 定义查询条件结构体
@@ -387,8 +267,6 @@ type SyslogQuery struct {
 	EndTime   time.Time // 创建时间结束
 }
 
-// 分页获取系统操作日志，带有排序字段，带排序方向，页码，页大小，查询条件
-// 返回列表和查询的总数
 // 分页获取系统操作日志（带组合条件、排序、分页）
 func (d *DbSyslogRec) GetSyslogWithSort(
 	pageNum int,
@@ -397,66 +275,49 @@ func (d *DbSyslogRec) GetSyslogWithSort(
 	sortOrder string,
 	query SyslogQuery,
 ) ([]Syslog, int64, error) {
-	if pageNum <= 0 {
+	if pageNum <= 0 || d == nil || d.db == nil {
 		return []Syslog{}, 0, nil
 	}
-	// 1. 连接数据库（建议抽离为全局连接，避免重复打开关闭）
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database:", err)
-		return nil, 0, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to get DB instance:", err)
-		return nil, 0, err
-	}
-	defer sqlDB.Close() // 确保连接关闭
 
-	// 2. 构建查询条件（基于空Model开始，避免直接操作db导致全局污染）
-	tx := db.Model(&Syslog{}) // 基于Syslog表构建查询
+	tx := d.db.Model(&Syslog{})
 
-	// 动态添加条件（仅当条件非空时生效）
 	if query.Operator != "" {
-		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%") // 模糊匹配操作员
+		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%")
 	}
 	if query.Module != "" {
-		tx = tx.Where("module LIKE ?", "%"+query.Module+"%") // 模糊匹配模块
+		tx = tx.Where("module LIKE ?", "%"+query.Module+"%")
 	}
-	if query.RoleId != 0 { // 假设RoleId为0时表示无此条件
-		tx = tx.Where("role_id = ?", query.RoleId) // 精确匹配角色ID
+	if query.RoleId != 0 {
+		tx = tx.Where("role_id = ?", query.RoleId)
 	}
 	if !query.StartTime.IsZero() {
-		tx = tx.Where("create_time >= ?", query.StartTime) // 大于等于起始时间
+		tx = tx.Where("create_time >= ?", query.StartTime)
 	}
 	if !query.EndTime.IsZero() {
-		tx = tx.Where("create_time <= ?", query.EndTime) // 小于等于结束时间
+		tx = tx.Where("create_time <= ?", query.EndTime)
 	}
 
-	// 3. 统计符合条件的总数
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
-		l.Log.Debug("failed to count syslogs:", err)
+		l.Log.Errorf("failed to count syslogs: %v", err)
 		return nil, 0, err
 	}
 
-	// 4. 处理排序（默认按创建时间倒序，避免无效排序）
 	if sortField == "" {
-		sortField = "create_time" // 默认排序字段
+		sortField = "create_time"
 	}
 	if sortOrder == "" || (sortOrder != "asc" && sortOrder != "desc") {
-		sortOrder = "desc" // 默认倒序
+		sortOrder = "desc"
 	}
 	orderStr := sortField + " " + sortOrder
 
-	// 5. 分页查询符合条件的数据
 	var syslogs []Syslog
 	if err := tx.
 		Order(orderStr).
 		Limit(pageSize).
-		Offset((pageNum - 1) * pageSize). // 计算偏移量（注意pageNum=0的边界处理）
+		Offset((pageNum - 1) * pageSize).
 		Find(&syslogs).Error; err != nil {
-		l.Log.Debug("failed to query syslogs:", err)
+		l.Log.Errorf("failed to query syslogs: %v", err)
 		return nil, 0, err
 	}
 
@@ -464,7 +325,6 @@ func (d *DbSyslogRec) GetSyslogWithSort(
 }
 
 // 分页获取标定日志（带组合条件、排序、分页）
-// 返回列表和查询的总数
 func (d *DbSyslogRec) GetCalibrationLogWithSort(
 	pageNum int,
 	pageSize int,
@@ -472,68 +332,52 @@ func (d *DbSyslogRec) GetCalibrationLogWithSort(
 	sortOrder string,
 	query SyslogQuery,
 ) ([]CalibrationLog, int64, error) {
-	if pageNum <= 0 {
+	if pageNum <= 0 || d == nil || d.db == nil {
 		return []CalibrationLog{}, 0, nil
 	}
-	// 1. 连接数据库（建议抽离为全局连接，避免重复打开关闭）
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database:", err)
-		return nil, 0, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to get DB instance:", err)
-		return nil, 0, err
-	}
-	defer sqlDB.Close() // 确保连接关闭
 
-	// 2. 构建查询条件（基于空Model开始，避免直接操作db导致全局污染）
-	tx := db.Model(&CalibrationLog{}) // 基于CalibrationLog表构建查询
+	tx := d.db.Model(&CalibrationLog{})
 
-	// 动态添加条件（仅当条件非空时生效）
 	if query.Operator != "" {
-		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%") // 模糊匹配操作员
+		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%")
 	}
-
-	if query.RoleId != 0 { // 假设RoleId为0时表示无此条件
-		tx = tx.Where("role_id = ?", query.RoleId) // 精确匹配角色ID
+	if query.RoleId != 0 {
+		tx = tx.Where("role_id = ?", query.RoleId)
 	}
 	if !query.StartTime.IsZero() {
-		tx = tx.Where("create_time >= ?", query.StartTime) // 大于等于起始时间
+		tx = tx.Where("create_time >= ?", query.StartTime)
 	}
 	if !query.EndTime.IsZero() {
-		tx = tx.Where("create_time <= ?", query.EndTime) // 小于等于结束时间
+		tx = tx.Where("create_time <= ?", query.EndTime)
 	}
-	// 3. 统计符合条件的总数
+
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
-		l.Log.Debug("failed to count calibration logs:", err)
+		l.Log.Errorf("failed to count calibration logs: %v", err)
 		return nil, 0, err
 	}
-	// 4. 处理排序（默认按创建时间倒序，避免无效排序）
+
 	if sortField == "" {
-		sortField = "create_time" // 默认排序字段
+		sortField = "create_time"
 	}
 	if sortOrder == "" || (sortOrder != "asc" && sortOrder != "desc") {
-		sortOrder = "desc" // 默认倒序
+		sortOrder = "desc"
 	}
 	orderStr := sortField + " " + sortOrder
-	// 5. 分页查询符合条件的数据
+
 	var calibrationLogs []CalibrationLog
 	if err := tx.
 		Order(orderStr).
 		Limit(pageSize).
-		Offset((pageNum - 1) * pageSize). // 计算偏移量（注意pageNum=0的边界处理）
+		Offset((pageNum - 1) * pageSize).
 		Find(&calibrationLogs).Error; err != nil {
-		l.Log.Debug("failed to query calibration logs:", err)
+		l.Log.Errorf("failed to query calibration logs: %v", err)
 		return nil, 0, err
 	}
 	return calibrationLogs, total, nil
 }
 
 // 分页获取称重日志（带组合条件、排序、分页）
-// 返回列表和查询的总数
 func (d *DbSyslogRec) GetScaleLogWithSort(
 	pageNum int,
 	pageSize int,
@@ -541,323 +385,229 @@ func (d *DbSyslogRec) GetScaleLogWithSort(
 	sortOrder string,
 	query SyslogQuery,
 ) ([]ScaleWgtLog, int64, error) {
-
-	if pageNum <= 0 {
+	if pageNum <= 0 || d == nil || d.db == nil {
 		return []ScaleWgtLog{}, 0, nil
 	}
 
-	// 1. 连接数据库（建议抽离为全局连接，避免重复打开关闭）
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database:", err)
-		return nil, 0, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to get DB instance:", err)
-		return nil, 0, err
-	}
-	defer sqlDB.Close() // 确保连接关闭
-	// 2. 构建查询条件（基于空Model开始，避免直接操作db导致全局污染）
-	tx := db.Model(&ScaleWgtLog{}) // 基于WeightLog表构建查询
-	// 动态添加条件（仅当条件非空时生效）
-	if query.Operator != "" {
-		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%") // 模糊匹配操作员
-	}
+	tx := d.db.Model(&ScaleWgtLog{})
 
-	if query.RoleId != 0 { // 假设RoleId为0时表示无此条件
-		tx = tx.Where("role_id = ?", query.RoleId) // 精确匹配角色ID
+	if query.Operator != "" {
+		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%")
+	}
+	if query.RoleId != 0 {
+		tx = tx.Where("role_id = ?", query.RoleId)
 	}
 	if !query.StartTime.IsZero() {
-		tx = tx.Where("create_time >= ?", query.StartTime) // 大于等于起始时间
+		tx = tx.Where("create_time >= ?", query.StartTime)
 	}
 	if !query.EndTime.IsZero() {
-		tx = tx.Where("create_time <= ?", query.EndTime) // 小于等于结束时间
+		tx = tx.Where("create_time <= ?", query.EndTime)
 	}
-	// 3. 统计符合条件的总数
+
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
-		l.Log.Debug("failed to count weight logs:", err)
+		l.Log.Errorf("failed to count weight logs: %v", err)
 		return nil, 0, err
 	}
-	// 4. 处理排序（默认按创建时间倒序，避免无效排序）
+
 	if sortField == "" {
-		sortField = "create_time" // 默认排序字段
+		sortField = "create_time"
 	}
 	if sortOrder == "" || (sortOrder != "asc" && sortOrder != "desc") {
-		sortOrder = "desc" // 默认倒序
+		sortOrder = "desc"
 	}
 	orderStr := sortField + " " + sortOrder
-	// 5. 分页查询符合条件的数据
+
 	var weightLogs []ScaleWgtLog
 	if err := tx.
 		Order(orderStr).
 		Limit(pageSize).
-		Offset((pageNum - 1) * pageSize). // 计算偏移量（注意pageNum=0的边界处理）
+		Offset((pageNum - 1) * pageSize).
 		Find(&weightLogs).Error; err != nil {
-		l.Log.Debug("failed to query weight logs:", err)
+		l.Log.Errorf("failed to query weight logs: %v", err)
 		return nil, 0, err
 	}
 	return weightLogs, total, nil
 }
 
-// 分页获取系统操作日志，带有排序字段，带排序方向，页码，页大小，查询条件
-// 返回列表和查询的总数
-// 分页获取系统操作日志（带组合条件、排序、分页）
 func (d *DbSyslogRec) ExportSyslogWithSort(
 	sortField string,
 	sortOrder string,
 	query SyslogQuery,
 ) ([]Syslog, error) {
-
-	// 1. 连接数据库（建议抽离为全局连接，避免重复打开关闭）
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database:", err)
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to get DB instance:", err)
-		return nil, err
-	}
-	defer sqlDB.Close() // 确保连接关闭
 
-	// 2. 构建查询条件（基于空Model开始，避免直接操作db导致全局污染）
-	tx := db.Model(&Syslog{}) // 基于Syslog表构建查询
+	tx := d.db.Model(&Syslog{})
 
-	// 动态添加条件（仅当条件非空时生效）
 	if query.Operator != "" {
-		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%") // 模糊匹配操作员
+		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%")
 	}
 	if query.Module != "" {
-		tx = tx.Where("module LIKE ?", "%"+query.Module+"%") // 模糊匹配模块
+		tx = tx.Where("module LIKE ?", "%"+query.Module+"%")
 	}
-	if query.RoleId != 0 { // 假设RoleId为0时表示无此条件
-		tx = tx.Where("role_id = ?", query.RoleId) // 精确匹配角色ID
+	if query.RoleId != 0 {
+		tx = tx.Where("role_id = ?", query.RoleId)
 	}
 	if !query.StartTime.IsZero() {
-		tx = tx.Where("create_time >= ?", query.StartTime) // 大于等于起始时间
+		tx = tx.Where("create_time >= ?", query.StartTime)
 	}
 	if !query.EndTime.IsZero() {
-		tx = tx.Where("create_time <= ?", query.EndTime) // 小于等于结束时间
+		tx = tx.Where("create_time <= ?", query.EndTime)
 	}
 
-	// 4. 处理排序（默认按创建时间倒序，避免无效排序）
 	if sortField == "" {
-		sortField = "create_time" // 默认排序字段
+		sortField = "create_time"
 	}
 	if sortOrder == "" || (sortOrder != "asc" && sortOrder != "desc") {
-		sortOrder = "desc" // 默认倒序
+		sortOrder = "desc"
 	}
 	orderStr := sortField + " " + sortOrder
 
-	// 5. 分页查询符合条件的数据
 	var syslogs []Syslog
 	if err := tx.
 		Order(orderStr).
 		Find(&syslogs).Error; err != nil {
-		l.Log.Debug("failed to query syslogs:", err)
+		l.Log.Errorf("failed to query syslogs: %v", err)
 		return nil, err
 	}
 	return syslogs, nil
 }
 
-// 分页获取标定日志（带组合条件、排序、分页）
-// 返回列表和查询的总数
 func (d *DbSyslogRec) ExportCalibrationLogWithSort(
 	sortField string,
 	sortOrder string,
 	query SyslogQuery,
 ) ([]CalibrationLog, error) {
-
-	// 1. 连接数据库（建议抽离为全局连接，避免重复打开关闭）
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database:", err)
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to get DB instance:", err)
-		return nil, err
-	}
-	defer sqlDB.Close() // 确保连接关闭
 
-	// 2. 构建查询条件（基于空Model开始，避免直接操作db导致全局污染）
-	tx := db.Model(&CalibrationLog{}) // 基于CalibrationLog表构建查询
+	tx := d.db.Model(&CalibrationLog{})
 
-	// 动态添加条件（仅当条件非空时生效）
 	if query.Operator != "" {
-		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%") // 模糊匹配操作员
+		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%")
 	}
-
-	if query.RoleId != 0 { // 假设RoleId为0时表示无此条件
-		tx = tx.Where("role_id = ?", query.RoleId) // 精确匹配角色ID
+	if query.RoleId != 0 {
+		tx = tx.Where("role_id = ?", query.RoleId)
 	}
 	if !query.StartTime.IsZero() {
-		tx = tx.Where("create_time >= ?", query.StartTime) // 大于等于起始时间
+		tx = tx.Where("create_time >= ?", query.StartTime)
 	}
 	if !query.EndTime.IsZero() {
-		tx = tx.Where("create_time <= ?", query.EndTime) // 小于等于结束时间
+		tx = tx.Where("create_time <= ?", query.EndTime)
 	}
 
-	// 4. 处理排序（默认按创建时间倒序，避免无效排序）
 	if sortField == "" {
-		sortField = "create_time" // 默认排序字段
+		sortField = "create_time"
 	}
 	if sortOrder == "" || (sortOrder != "asc" && sortOrder != "desc") {
-		sortOrder = "desc" // 默认倒序
+		sortOrder = "desc"
 	}
 	orderStr := sortField + " " + sortOrder
-	// 5. 分页查询符合条件的数据
+
 	var calibrationLogs []CalibrationLog
 	if err := tx.
 		Order(orderStr).
 		Find(&calibrationLogs).Error; err != nil {
-		l.Log.Debug("failed to query calibration logs:", err)
+		l.Log.Errorf("failed to query calibration logs: %v", err)
 		return nil, err
 	}
 	return calibrationLogs, nil
 }
 
-// 分页获取称重日志（带组合条件、排序、分页）
-// 返回列表和查询的总数
 func (d *DbSyslogRec) ExportScaleLogWithSort(
 	sortField string,
 	sortOrder string,
 	query SyslogQuery,
 ) ([]ScaleWgtLog, error) {
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
+	}
 
-	// 1. 连接数据库（建议抽离为全局连接，避免重复打开关闭）
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database:", err)
-		return nil, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to get DB instance:", err)
-		return nil, err
-	}
-	defer sqlDB.Close() // 确保连接关闭
-	// 2. 构建查询条件（基于空Model开始，避免直接操作db导致全局污染）
-	tx := db.Model(&ScaleWgtLog{}) // 基于WeightLog表构建查询
-	// 动态添加条件（仅当条件非空时生效）
+	tx := d.db.Model(&ScaleWgtLog{})
+
 	if query.Operator != "" {
-		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%") // 模糊匹配操作员
+		tx = tx.Where("operator LIKE ?", "%"+query.Operator+"%")
 	}
-
-	if query.RoleId != 0 { // 假设RoleId为0时表示无此条件
-		tx = tx.Where("role_id = ?", query.RoleId) // 精确匹配角色ID
+	if query.RoleId != 0 {
+		tx = tx.Where("role_id = ?", query.RoleId)
 	}
 	if !query.StartTime.IsZero() {
-		tx = tx.Where("create_time >= ?", query.StartTime) // 大于等于起始时间
+		tx = tx.Where("create_time >= ?", query.StartTime)
 	}
 	if !query.EndTime.IsZero() {
-		tx = tx.Where("create_time <= ?", query.EndTime) // 小于等于结束时间
+		tx = tx.Where("create_time <= ?", query.EndTime)
 	}
-	// 3. 统计符合条件的总数
+
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
-		l.Log.Debug("failed to count weight logs:", err)
+		l.Log.Errorf("failed to count weight logs: %v", err)
 		return nil, err
 	}
-	// 4. 处理排序（默认按创建时间倒序，避免无效排序）
+
 	if sortField == "" {
-		sortField = "create_time" // 默认排序字段
+		sortField = "create_time"
 	}
 	if sortOrder == "" || (sortOrder != "asc" && sortOrder != "desc") {
-		sortOrder = "desc" // 默认倒序
+		sortOrder = "desc"
 	}
 	orderStr := sortField + " " + sortOrder
-	// 5. 分页查询符合条件的数据
+
 	var weightLogs []ScaleWgtLog
 	if err := tx.
 		Order(orderStr).
 		Find(&weightLogs).Error; err != nil {
-		l.Log.Debug("failed to query weight logs:", err)
+		l.Log.Errorf("failed to query weight logs: %v", err)
 		return nil, err
 	}
 	return weightLogs, nil
 }
 
-// 根据日志ID列表获取系统日志记录
 func (d *DbSyslogRec) GetSyslogByID(RecIds []int) ([]Syslog, error) {
-	// 1. 连接数据库（建议抽离为全局连接，避免重复打开关闭）
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database:", err)
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to get DB instance:", err)
-		return nil, err
-	}
-	defer sqlDB.Close()
 
-	tx := db.Model(&Syslog{})
-
+	tx := d.db.Model(&Syslog{})
 	var syslogs []Syslog
 	if err := tx.
 		Where("rec_id IN ?", RecIds).
 		Find(&syslogs).Error; err != nil {
-		l.Log.Debug("failed to query syslog by rec_id:", err)
+		l.Log.Errorf("failed to query syslog by rec_id: %v", err)
 		return nil, err
 	}
 	return syslogs, nil
 }
 
-// 根据日志ID列表获取校准日志记录
 func (d *DbSyslogRec) GetCalibrationLogByID(RecIds []int) ([]CalibrationLog, error) {
-	// 1. 连接数据库（建议抽离为全局连接，避免重复打开关闭）
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database:", err)
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to get DB instance:", err)
-		return nil, err
-	}
-	defer sqlDB.Close()
 
-	tx := db.Model(&CalibrationLog{})
-
+	tx := d.db.Model(&CalibrationLog{})
 	var calibrationLogs []CalibrationLog
 	if err := tx.
 		Where("rec_id IN ?", RecIds).
 		Find(&calibrationLogs).Error; err != nil {
-		l.Log.Debug("failed to query calibration log by rec_id:", err)
+		l.Log.Errorf("failed to query calibration log by rec_id: %v", err)
 		return nil, err
 	}
 	return calibrationLogs, nil
 }
 
-// 根据日志ID列表获取称重日志记录
 func (d *DbSyslogRec) GetScaleLogByID(RecIds []int) ([]ScaleWgtLog, error) {
-	// 1. 连接数据库（建议抽离为全局连接，避免重复打开关闭）
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database:", err)
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to get DB instance:", err)
-		return nil, err
-	}
-	defer sqlDB.Close()
 
-	tx := db.Model(&ScaleWgtLog{})
-
+	tx := d.db.Model(&ScaleWgtLog{})
 	var scaleLogs []ScaleWgtLog
 	if err := tx.
 		Where("rec_id IN ?", RecIds).
 		Find(&scaleLogs).Error; err != nil {
-		l.Log.Debug("failed to query scale log by rec_id:", err)
+		l.Log.Errorf("failed to query scale log by rec_id: %v", err)
 		return nil, err
 	}
 	return scaleLogs, nil
@@ -877,48 +627,20 @@ type SealLog struct {
 }
 
 func (d *DbSyslogRec) CreateSealLog(log *SealLog) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	if err = db.Create(log).Error; err != nil {
-		return err
-	}
-	return nil
+	return d.db.Create(log).Error
 }
 
-// 查询印章日志列表
 func (d *DbSyslogRec) ListSealLogs(model string, sn string) ([]SealLog, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []SealLog{}, err
-
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []SealLog{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return []SealLog{}, errors.New("db connection is nil")
 	}
 	var logs []SealLog
-
-	result := db.Where("model = ? and sn = ?", model, sn).Find(&logs)
+	result := d.db.Where("model = ? and sn = ?", model, sn).Find(&logs)
 	if result.Error != nil {
-		return []SealLog{}, err
+		return []SealLog{}, result.Error
 	}
-	if result.RowsAffected == 0 {
-		return []SealLog{}, err
-	}
-	return logs, result.Error
+	return logs, nil
 }

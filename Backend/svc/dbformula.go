@@ -1,16 +1,17 @@
 package svc
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type DbFormulaInfo struct {
 	dbName string
+	db     *gorm.DB
 }
 
 // RawMaterialCategory 原料类别表
@@ -304,8 +305,18 @@ type FormulaWgtRecList struct {
 }
 
 // 初始化数据库连接和表结构
+func (d *DbFormulaInfo) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
+}
+
 func NewFormulaInfo(dbName string) (*DbFormulaInfo, error) {
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +360,7 @@ func NewFormulaInfo(dbName string) (*DbFormulaInfo, error) {
 	db.Exec("UPDATE formula_wgt_rec_details SET check_code = material_id WHERE check_code IS NULL OR check_code = ''")
 	db.Exec("UPDATE raw_materials SET check_code = material_id WHERE check_code IS NULL OR check_code = ''")
 
-	info := &DbFormulaInfo{dbName: dbName}
+	info := &DbFormulaInfo{dbName: dbName, db: db}
 	// 通过实例调用方法
 	if err := info.UpdateFormulaKeyInWgtRecHeader(); err != nil {
 		return nil, err
@@ -385,7 +396,7 @@ func NewFormulaInfo(dbName string) (*DbFormulaInfo, error) {
 	err = db.Where("category_name = ?", "-").First(&rawMaterialCategory).Error
 	if err == nil {
 		// 找到记录，修改 CategoryID 为 0
-		err = db.Model(&RawMaterialCategory{}).Where("category_name = ?", "-").Update("category_id", 0).Error
+		err := db.Model(&RawMaterialCategory{}).Where("category_name = ?", "-").Update("category_id", 0).Error
 		if err != nil {
 			return nil, err
 		}
@@ -395,7 +406,7 @@ func NewFormulaInfo(dbName string) (*DbFormulaInfo, error) {
 	err = db.Where("category_name = ?", "-").First(&formulaCategory).Error
 	if err == nil {
 		// 找到记录，修改 CategoryID 为 0
-		err = db.Model(&formulaCategory).Where("category_name = ?", "-").Update("category_id", 0).Error
+		err := db.Model(&formulaCategory).Where("category_name = ?", "-").Update("category_id", 0).Error
 		if err != nil {
 			return nil, err
 		}
@@ -426,17 +437,10 @@ func NewFormulaInfo(dbName string) (*DbFormulaInfo, error) {
 
 // 更新 FormulaWgtRecHeader 中 formula_key 为 0 的记录
 func (d *DbFormulaInfo) UpdateFormulaKeyInWgtRecHeader() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -448,7 +452,7 @@ func (d *DbFormulaInfo) UpdateFormulaKeyInWgtRecHeader() error {
 	subQueryExpr := gorm.Expr("(SELECT rec_id FROM formula_headers WHERE formula_id = formula_wgt_rec_headers.formula_id AND is_used = 1 AND is_latest = 1)")
 
 	// 更新 FormulaWgtRecHeader 中 formula_key 为 0 的记录
-	err = tx.Model(&FormulaWgtRecHeader{}).
+	err := tx.Model(&FormulaWgtRecHeader{}).
 		Where("formula_key = ?", 0).
 		Update("formula_key", subQueryExpr).
 		Error
@@ -463,68 +467,40 @@ func (d *DbFormulaInfo) UpdateFormulaKeyInWgtRecHeader() error {
 
 // 删除未使用的原料类别
 func (d *DbFormulaInfo) DeleteUnusedRawMaterialCategories() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	return db.Where("NOT EXISTS (SELECT 1 FROM raw_materials WHERE raw_materials.category_id = raw_material_categories.category_id)").
 		Delete(&RawMaterialCategory{}).Error
 }
 
 // 删除未使用的配方类别
 func (d *DbFormulaInfo) DeleteUnusedFormulaCategories() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	return db.Where("NOT EXISTS (SELECT 1 FROM formula_headers WHERE formula_headers.category_id = formula_categories.category_id)").
 		Delete(&FormulaCategory{}).Error
 }
 
 // 新增配方类别
 func (d *DbFormulaInfo) CreateFormulaCategory(category FormulaCategory) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	return db.Create(&category).Error
 }
 
 // 新增配方类别列表
 func (d *DbFormulaInfo) CreateFormulaCategoryList(categories []string) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -564,90 +540,54 @@ func (d *DbFormulaInfo) CreateFormulaCategoryList(categories []string) error {
 
 // 获取所有配方类别
 func (d *DbFormulaInfo) GetAllFormulaCategories() ([]FormulaCategory, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var categories []FormulaCategory
-	err = db.Find(&categories).Error
+	err := db.Find(&categories).Error
 	return categories, err
 }
 
 // 根据 ID 获取配方类别
 func (d *DbFormulaInfo) GetFormulaCategoryByID(id int) (FormulaCategory, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return FormulaCategory{}, err
+	if d == nil || d.db == nil {
+		return FormulaCategory{}, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return FormulaCategory{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var category FormulaCategory
-	err = db.First(&category, id).Error
+	err := db.First(&category, id).Error
 	return category, err
 }
 
 // 更新配方类别
 func (d *DbFormulaInfo) UpdateFormulaCategory(category FormulaCategory) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	return db.Save(&category).Error
 }
 
 // 删除配方类别
 func (d *DbFormulaInfo) DeleteFormulaCategory(name string) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	return db.Delete(&FormulaCategory{}, "category_name  = ?", name).Error
 }
 
 // 新增原料类别
 func (d *DbFormulaInfo) CreateRawMaterialCategory(category RawMaterialCategory) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	tx := db.Create(&category)
 	if tx.Error != nil {
@@ -658,18 +598,10 @@ func (d *DbFormulaInfo) CreateRawMaterialCategory(category RawMaterialCategory) 
 
 // 新增原料类别
 func (d *DbFormulaInfo) CreateRawCategoryList(categories []string) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 遍历所有类别名称
 	for _, categoryName := range categories {
@@ -695,22 +627,14 @@ func (d *DbFormulaInfo) CreateRawCategoryList(categories []string) error {
 
 // 获取所有原料类别
 func (d *DbFormulaInfo) GetAllRawMaterialCategories() ([]RawMaterialCategory, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []RawMaterialCategory{}, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []RawMaterialCategory{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var categories []RawMaterialCategory
 
-	err = db.Find(&categories).Error
+	err := db.Find(&categories).Error
 	if err != nil {
 		return nil, err
 	}
@@ -719,20 +643,12 @@ func (d *DbFormulaInfo) GetAllRawMaterialCategories() ([]RawMaterialCategory, er
 
 // 根据 ID 获取原料类别
 func (d *DbFormulaInfo) GetRawMaterialCategoryByID(id int) (RawMaterialCategory, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return RawMaterialCategory{}, err
+	if d == nil || d.db == nil {
+		return RawMaterialCategory{}, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return RawMaterialCategory{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	var category RawMaterialCategory
-	err = db.First(&category, id).Error
+	err := db.First(&category, id).Error
 
 	if err != nil {
 		return category, err
@@ -742,71 +658,39 @@ func (d *DbFormulaInfo) GetRawMaterialCategoryByID(id int) (RawMaterialCategory,
 
 // 更新原料类别
 func (d *DbFormulaInfo) UpdateRawMaterialCategory(category RawMaterialCategory) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	return db.Save(&category).Error
 }
 
 // 删除原料类别
 func (d *DbFormulaInfo) DeleteRawMaterialCategory(name string) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	return db.Delete(&RawMaterialCategory{}, "category_name = ?", name).Error
 }
 
 // 新增原料
 func (d *DbFormulaInfo) CreateRawMaterial(material RawMaterial) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	return db.Create(&material).Error
 }
 
 // 获取最大的原料ID
 func (d *DbFormulaInfo) GetMaxRawRecId() (int, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return 0, err
+	if d == nil || d.db == nil {
+		return 0, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return 0, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	var maxId int
-	err = db.Raw("SELECT MAX(rec_id) FROM raw_materials").Scan(&maxId).Error
+	err := db.Raw("SELECT MAX(rec_id) FROM raw_materials").Scan(&maxId).Error
 	if err != nil {
 		return 0, err
 	}
@@ -816,24 +700,16 @@ func (d *DbFormulaInfo) GetMaxRawRecId() (int, error) {
 // 根据FMAID获取原料数据的输出口
 // 根据配方的ID 找到原料ID，再找到原料的输出口
 func (d *DbFormulaInfo) GetRawOutputByFmaId(fmaId string) ([]RawMaterialOutput, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []RawMaterialOutput{}, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []RawMaterialOutput{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var outputs []RawMaterialOutput
 
 	// 1. 先根据 fmaId 查询配方头表，获取配方记录ID (RecId)
 	var formulaHeader FormulaHeader
-	err = db.Where("formula_id = ? AND is_used = ? AND is_latest = ?", fmaId, true, true).First(&formulaHeader).Error
+	err := db.Where("formula_id = ? AND is_used = ? AND is_latest = ?", fmaId, true, true).First(&formulaHeader).Error
 	if err != nil {
 		return []RawMaterialOutput{}, err
 	}
@@ -859,17 +735,10 @@ func (d *DbFormulaInfo) GetRawOutputByFmaId(fmaId string) ([]RawMaterialOutput, 
 
 // 批量新增原料
 func (d *DbFormulaInfo) CreateRawMaterialList(materials []RawMaterial) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -889,36 +758,21 @@ func (d *DbFormulaInfo) CreateRawMaterialList(materials []RawMaterial) error {
 
 // 获取所有原料
 func (d *DbFormulaInfo) GetAllRawMaterials() ([]RawMaterial, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []RawMaterial{}, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []RawMaterial{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	var materials []RawMaterial
-	err = db.Find(&materials).Error
+	err := db.Find(&materials).Error
 	return materials, err
 }
 
 // 分页与全局排序查询原料列表
 func (d *DbFormulaInfo) GetRawMaterialByPage(req ReqGetRawMaterialByPage) (*RespRawMaterialByPage, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	pageSize := req.PageSize
 	if pageSize <= 0 {
@@ -972,26 +826,19 @@ func (d *DbFormulaInfo) GetRawMaterialByPage(req ReqGetRawMaterialByPage) (*Resp
 		return resp, nil
 	}
 
-	err = query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&resp.List).Error
+	err := query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&resp.List).Error
 	return resp, err
 }
 
 // 获取极简原料字典（只包含 material_id 和 material_name，专供配方弹窗下拉）
 func (d *DbFormulaInfo) GetRawMaterialDict() ([]RawMaterialDictItem, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var items []RawMaterialDictItem
-	err = db.Model(&RawMaterial{}).Select("material_id, material_name").Scan(&items).Error
+	err := db.Model(&RawMaterial{}).Select("material_id, material_name").Scan(&items).Error
 	return items, err
 }
 
@@ -1001,17 +848,10 @@ func (d *DbFormulaInfo) GetAllRawMaterialsStream(req ReqGetRawMaterialByPage, ch
 		chunkSize = 2000
 	}
 
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	sortMap := map[string]string{
 		"materialId":   "material_id",
@@ -1062,7 +902,7 @@ func (d *DbFormulaInfo) GetAllRawMaterialsStream(req ReqGetRawMaterialByPage, ch
 		offset := i * chunkSize
 
 		var materials []RawMaterial
-		err = query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&materials).Error
+		err := query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&materials).Error
 		if err != nil {
 			return err
 		}
@@ -1082,56 +922,32 @@ func (d *DbFormulaInfo) GetAllRawMaterialsStream(req ReqGetRawMaterialByPage, ch
 
 // 获取原料
 func (d *DbFormulaInfo) GetRawMaterial(recId int) ([]RawMaterial, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []RawMaterial{}, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []RawMaterial{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	var materials []RawMaterial
-	err = db.Find(&materials).Error
+	err := db.Find(&materials).Error
 	return materials, err
 }
 
 // 根据 ID 获取原料
 func (d *DbFormulaInfo) GetRawMaterialByID(id int) ([]RawMaterial, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []RawMaterial{}, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []RawMaterial{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	var materials []RawMaterial
-	err = db.Where("rec_id = ?", id).Find(&materials).Error
+	err := db.Where("rec_id = ?", id).Find(&materials).Error
 	return materials, err
 }
 
 // 更新原料
 func (d *DbFormulaInfo) UpdateRawMaterial(material RawMaterial) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 忽略 CreatedAt 字段，根据 RecId 更新原料信息，并更新 UpdatedAt 为当前时间
 	return db.Model(&RawMaterial{}).Where("rec_id = ?", material.RecId).Omit("CreatedAt").Updates(map[string]interface{}{
 		"material_name": material.MaterialName,
@@ -1149,36 +965,20 @@ func (d *DbFormulaInfo) UpdateRawMaterial(material RawMaterial) error {
 
 // 删除原料
 func (d *DbFormulaInfo) DeleteRawMaterial(recId int) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 修改为根据 recId 删除原料
 	return db.Where("rec_id = ?", recId).Delete(&RawMaterial{}).Error
 }
 
 // 删除所有原料 - 只删除未被使用的原料
 func (d *DbFormulaInfo) DeleteAllRawMaterials(recIds []int) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -1188,7 +988,7 @@ func (d *DbFormulaInfo) DeleteAllRawMaterials(recIds []int) error {
 
 	// 查找未被配方明细使用的原料ID
 	var unusedMaterialIDs []int
-	err = tx.Model(&RawMaterial{}).
+	err := tx.Model(&RawMaterial{}).
 		Where("rec_id IN ? AND material_id NOT IN (SELECT DISTINCT material_id FROM formula_details)", recIds).
 		Pluck("rec_id", &unusedMaterialIDs).Error
 	if err != nil {
@@ -1210,17 +1010,10 @@ func (d *DbFormulaInfo) DeleteAllRawMaterials(recIds []int) error {
 
 // 新增配方列表
 func (d *DbFormulaInfo) InsertFormulaList(list []FmaDataImportInfo) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 开启事务
 	tx := db.Begin()
 	if tx.Error != nil {
@@ -1252,21 +1045,14 @@ func (d *DbFormulaInfo) InsertFormulaList(list []FmaDataImportInfo) error {
 // 根据配方编号查询 FormulaList
 func (d *DbFormulaInfo) GetFormulaListByFormulaID(formulaID string) (FormulaList, error) {
 	var list FormulaList
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return list, err
+	if d == nil || d.db == nil {
+		return FormulaList{}, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return list, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 查询配方头信息
 	var header FormulaHeader
-	err = db.Where("formula_id = ? AND is_used = ? AND is_latest = ?", formulaID, true, true).First(&header).Error
+	err := db.Where("formula_id = ? AND is_used = ? AND is_latest = ?", formulaID, true, true).First(&header).Error
 	if err != nil {
 		return list, err
 	}
@@ -1289,20 +1075,13 @@ func (d *DbFormulaInfo) GetFormulaListByFormulaID(formulaID string) (FormulaList
 // 根据rec_id 查询配方信息
 func (d *DbFormulaInfo) GetFormulaByRecId(recId int) (FormulaList, error) {
 	var list FormulaList
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return list, err
+	if d == nil || d.db == nil {
+		return FormulaList{}, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return list, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	var header FormulaHeader
 	// 查询配方头信息
-	err = db.Where("rec_id = ? AND is_used = ? AND is_latest = ?", recId, true, true).First(&header).Error
+	err := db.Where("rec_id = ? AND is_used = ? AND is_latest = ?", recId, true, true).First(&header).Error
 	if err != nil {
 		return list, err
 	}
@@ -1323,17 +1102,10 @@ func (d *DbFormulaInfo) GetFormulaByRecId(recId int) (FormulaList, error) {
 
 // 分页与全局排序查询配方列表（懒加载步骤明细）
 func (d *DbFormulaInfo) GetFormulaByPage(req ReqGetFormulaByPage) (*RespFormulaByPage, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	pageSize := req.PageSize
 	if pageSize <= 0 {
@@ -1388,7 +1160,7 @@ func (d *DbFormulaInfo) GetFormulaByPage(req ReqGetFormulaByPage) (*RespFormulaB
 	}
 
 	var headers []FormulaHeader
-	err = query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&headers).Error
+	err := query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
@@ -1420,20 +1192,13 @@ func (d *DbFormulaInfo) GetFormulaByPage(req ReqGetFormulaByPage) (*RespFormulaB
 
 // 根据配方 RecId 懒加载获取该配方的工序明细
 func (d *DbFormulaInfo) GetFormulaDetailsByRecId(recId int) ([]FormulaDetail, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var details []FormulaDetail
-	err = db.Where("formula_rec_id = ?", recId).Find(&details).Error
+	err := db.Where("formula_rec_id = ?", recId).Find(&details).Error
 	return details, err
 }
 
@@ -1443,17 +1208,10 @@ func (d *DbFormulaInfo) GetAllFormulasStream(req ReqGetFormulaByPage, chunkSize 
 		chunkSize = 2000
 	}
 
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	sortMap := map[string]string{
 		"formulaId":   "formula_id",
@@ -1504,7 +1262,7 @@ func (d *DbFormulaInfo) GetAllFormulasStream(req ReqGetFormulaByPage, chunkSize 
 		offset := i * chunkSize
 
 		var headers []FormulaHeader
-		err = query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&headers).Error
+		err := query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&headers).Error
 		if err != nil {
 			return err
 		}
@@ -1550,20 +1308,13 @@ func (d *DbFormulaInfo) GetAllFormulasStream(req ReqGetFormulaByPage, chunkSize 
 // 根据记录编号查询 FormulaWgtRecList
 func (d *DbFormulaInfo) GetFormulaWgtRecListByRecordID(recordID string) (FormulaWgtRecList, error) {
 	var list FormulaWgtRecList
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return list, err
+	if d == nil || d.db == nil {
+		return FormulaWgtRecList{}, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return list, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 查询配方称重记录头信息
-	err = db.Where("record_id = ?", recordID).First(&list.Header).Error
+	err := db.Where("record_id = ?", recordID).First(&list.Header).Error
 	if err != nil {
 		return list, err
 	}
@@ -1581,27 +1332,20 @@ func (d *DbFormulaInfo) GetFormulaWgtRecListByRecordID(recordID string) (Formula
 func (d *DbFormulaInfo) GetFormulaData(id int) ([]FormulaList, error) {
 
 	var formulaLists []FormulaList
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var headers []FormulaHeader
-	err = db.Where("rec_id = ? AND is_used = ? AND is_latest = ?", id, true, true).Find(&headers).Error
+	err := db.Where("rec_id = ? AND is_used = ? AND is_latest = ?", id, true, true).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
 
 	for _, header := range headers {
 		var formulaDetails []FormulaDetail
-		err = db.Where("formula_rec_id = ?", header.RecId).Find(&formulaDetails).Error
+		err := db.Where("formula_rec_id = ?", header.RecId).Find(&formulaDetails).Error
 		if err != nil {
 			return nil, err
 		}
@@ -1618,21 +1362,14 @@ func (d *DbFormulaInfo) GetFormulaData(id int) ([]FormulaList, error) {
 
 // 检查配方ID和条码是否匹配
 func (d *DbFormulaInfo) CheckFmaIdAndBarcode(recId int, formulaID string, formulaBarcode string) (bool, bool, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return false, false, err
+	if d == nil || d.db == nil {
+		return false, false, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return false, false, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	var FormulaHeaders []FormulaHeader
 	var FormulaHeadersBarcode []FormulaHeader
 	// 查询配方头信息
-	err = db.Where("formula_id = ? AND is_used = ? AND is_latest = ?", formulaID, true, true).Find(&FormulaHeaders).Error
+	err := db.Where("formula_id = ? AND is_used = ? AND is_latest = ?", formulaID, true, true).Find(&FormulaHeaders).Error
 	if err != nil {
 		return false, false, err
 	}
@@ -1672,28 +1409,19 @@ func (d *DbFormulaInfo) CheckFmaIdAndBarcode(recId int, formulaID string, formul
 
 func (d *DbFormulaInfo) GetFormulaDataByBarcode(barcode string) ([]FormulaList, error) {
 	var formulaLists []FormulaList
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	var headers []FormulaHeader
 	// 查询配方头信息
-	err = db.Where("formula_barcode  = ? AND is_used = ? AND is_latest = ?", barcode, true, true).Find(&headers).Error
+	err := db.Where("formula_barcode  = ? AND is_used = ? AND is_latest = ?", barcode, true, true).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
 	for _, header := range headers {
 		var formulaDetails []FormulaDetail
-		err = db.Where("formula_rec_id = ?", header.RecId).Find(&formulaDetails).Error
+		err := db.Where("formula_rec_id = ?", header.RecId).Find(&formulaDetails).Error
 		if err != nil {
 			return nil, err
 		}
@@ -1709,20 +1437,13 @@ func (d *DbFormulaInfo) GetFormulaDataByBarcode(barcode string) ([]FormulaList, 
 // 查询所有的 FormulaList
 func (d *DbFormulaInfo) GetAllFormulaLists() ([]FormulaList, error) {
 	var formulaLists []FormulaList
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var headers []FormulaHeader
-	err = db.Where("is_used = ? AND is_latest = ?", true, true).Find(&headers).Error
+	err := db.Where("is_used = ? AND is_latest = ?", true, true).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
@@ -1763,33 +1484,12 @@ func (d *DbFormulaInfo) GetFmaWgtRecByOrderId(orderId string) (FormulaWgtRecList
 	retryDelay := 500 * time.Millisecond
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		// 每次重试都建立新的数据库连接
-		db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-		if err != nil {
-			// 如果是最后一次尝试，直接返回错误
-			if attempt == maxRetries {
-				return formulaWgtRecList, err
-			}
-			// 否则等待并继续重试
-			time.Sleep(retryDelay)
-			continue
+		if d == nil || d.db == nil {
+			return formulaWgtRecList, fmt.Errorf("db connection is nil")
 		}
-
-		sqlDB, err := db.DB()
-		if err != nil {
-			db = nil
-			if attempt == maxRetries {
-				return formulaWgtRecList, err
-			}
-			time.Sleep(retryDelay)
-			continue
-		}
-
-		// 确保数据库连接被关闭
-		defer sqlDB.Close()
-
+		db := d.db
 		var headers []FormulaWgtRecHeader
-		err = db.Where("record_id = ?", orderId).Find(&headers).Error
+		err := db.Where("record_id = ?", orderId).Find(&headers).Error
 		if err != nil {
 			// 如果是最后一次尝试，直接返回错误
 			if attempt == maxRetries {
@@ -1838,27 +1538,20 @@ func (d *DbFormulaInfo) GetFmaWgtRecByOrderId(orderId string) (FormulaWgtRecList
 // 查询一个配方称重记录通过配方ID
 func (d *DbFormulaInfo) GetOneFormulaWgtRecLists(fmaId string) ([]FormulaWgtRecList, error) {
 	var formulaWgtRecLists []FormulaWgtRecList
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var headers []FormulaWgtRecHeader
-	err = db.Where("formula_id = ?", fmaId).Find(&headers).Error
+	err := db.Where("formula_id = ?", fmaId).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
 
 	for _, header := range headers {
 		var details []FormulaWgtRecDetail
-		err = db.Where("record_id = ?", header.RecordID).Find(&details).Error
+		err := db.Where("record_id = ?", header.RecordID).Find(&details).Error
 		if err != nil {
 			return nil, err
 		}
@@ -1874,17 +1567,10 @@ func (d *DbFormulaInfo) GetOneFormulaWgtRecLists(fmaId string) ([]FormulaWgtRecL
 // 查询所有的 FormulaWgtRecList（支持带入前端当前的搜索过滤和全局排序条件）
 func (d *DbFormulaInfo) GetAllFormulaWgtRecLists(req ReqGetFormulaRecByPage) ([]FormulaWgtRecList, error) {
 	var formulaWgtRecLists []FormulaWgtRecList
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	sortMap := map[string]string{
 		"orderId":           "record_id",
@@ -1919,7 +1605,7 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecLists(req ReqGetFormulaRecByPage) ([]
 	}
 
 	var headers []FormulaWgtRecHeader
-	err = query.Order(orderClause).Find(&headers).Error
+	err := query.Order(orderClause).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
@@ -1961,17 +1647,10 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecListsStream(req ReqGetFormulaRecByPag
 		chunkSize = 2000
 	}
 
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	sortMap := map[string]string{
 		"orderId":           "record_id",
@@ -2028,7 +1707,7 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecListsStream(req ReqGetFormulaRecByPag
 		offset := i * chunkSize
 
 		var headers []FormulaWgtRecHeader
-		err = query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&headers).Error
+		err := query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&headers).Error
 		if err != nil {
 			return err
 		}
@@ -2076,14 +1755,10 @@ func (d *DbFormulaInfo) GetAllFormulaWgtRecListsStream(req ReqGetFormulaRecByPag
 
 // 分页与全局排序查询 FormulaWgtRecList
 func (d *DbFormulaInfo) GetFormulaWgtRecByPage(req ReqGetFormulaRecByPage) (*RespFormulaRecByPage, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, _ := db.DB()
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	sortMap := map[string]string{
 		"orderId":           "record_id",
@@ -2133,7 +1808,7 @@ func (d *DbFormulaInfo) GetFormulaWgtRecByPage(req ReqGetFormulaRecByPage) (*Res
 	offset := (page - 1) * pageSize
 
 	var headers []FormulaWgtRecHeader
-	err = query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&headers).Error
+	err := query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
@@ -2176,34 +1851,20 @@ func (d *DbFormulaInfo) GetFormulaWgtRecByPage(req ReqGetFormulaRecByPage) (*Res
 
 // 新增配方称重记录头
 func (d *DbFormulaInfo) CreateFormulaWgtRecHeader(header FormulaWgtRecHeader) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	return db.Create(&header).Error
 }
 
 // 新增配方称重记录详情
 func (d *DbFormulaInfo) CreateFormulaWgtRecDetail(detail FormulaWgtRecDetail) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	return db.Create(&detail).Error
 }
@@ -2211,20 +1872,12 @@ func (d *DbFormulaInfo) CreateFormulaWgtRecDetail(detail FormulaWgtRecDetail) er
 // 查询配方头中的最大的formula_key
 func (d *DbFormulaInfo) GetMaxFormulaRecKey() (int, error) {
 	var maxRecId int
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return 0, err
+	if d == nil || d.db == nil {
+		return 0, errors.New("db connection is nil")
+	}
+	db := d.db
 
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return 0, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	err = db.Model(&FormulaHeader{}).Select("MAX(formula_key)").Row().Scan(&maxRecId)
+	err := db.Model(&FormulaHeader{}).Select("MAX(formula_key)").Row().Scan(&maxRecId)
 	if err != nil {
 		return 0, err
 	}
@@ -2235,20 +1888,12 @@ func (d *DbFormulaInfo) GetMaxFormulaRecKey() (int, error) {
 // 查询配方头中的最大的recId
 func (d *DbFormulaInfo) GetMaxFormulaRecId() (int, error) {
 	var maxRecId int
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return 0, err
+	if d == nil || d.db == nil {
+		return 0, errors.New("db connection is nil")
+	}
+	db := d.db
 
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return 0, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	err = db.Model(&FormulaHeader{}).Select("MAX(rec_id)").Row().Scan(&maxRecId)
+	err := db.Model(&FormulaHeader{}).Select("MAX(rec_id)").Row().Scan(&maxRecId)
 	if err != nil {
 		return 0, err
 	}
@@ -2258,51 +1903,30 @@ func (d *DbFormulaInfo) GetMaxFormulaRecId() (int, error) {
 
 // 新增配方头
 func (d *DbFormulaInfo) CreateFormulaHeader(header FormulaHeader) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	return db.Create(&header).Error
 }
 
 // 新增配方明细
 func (d *DbFormulaInfo) CreateFormulaDetail(detail FormulaDetail) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	return db.Create(&detail).Error
 }
 
 // 修改配方，包含配方头和明细
 func (d *DbFormulaInfo) UpdateFormula(header FormulaHeader, details []FormulaDetail) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -2364,17 +1988,10 @@ func (d *DbFormulaInfo) UpdateFormula(header FormulaHeader, details []FormulaDet
 
 // 新增配方称重记录，包含记录头和详情
 func (d *DbFormulaInfo) CreateFormulaWgtRec(header FormulaWgtRecHeader, details []FormulaWgtRecDetail) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -2402,17 +2019,10 @@ func (d *DbFormulaInfo) CreateFormulaWgtRec(header FormulaWgtRecHeader, details 
 
 // 根据记录编号删除配方称重记录头和详情
 func (d *DbFormulaInfo) DeleteFormulaWgtRecByRecordID(recordID string) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -2438,14 +2048,10 @@ func (d *DbFormulaInfo) DeleteFormulaWgtRecByRecordID(recordID string) error {
 
 // 清空全库配方称重记录（包括头表和明细表）
 func (d *DbFormulaInfo) DeleteAllFormulaWgtRec() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, _ := db.DB()
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	tx := db.Begin()
 	if tx.Error != nil {
@@ -2471,49 +2077,34 @@ func (d *DbFormulaInfo) GetFormulaWgtRecHeadersByRecordIDs(recordIDs []string) (
 	if len(recordIDs) == 0 {
 		return headers, nil
 	}
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, _ := db.DB()
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
-	err = db.Where("record_id IN (?)", recordIDs).Find(&headers).Error
+	err := db.Where("record_id IN (?)", recordIDs).Find(&headers).Error
 	return headers, err
 }
 
 // 获取全库配方称重记录总数
 func (d *DbFormulaInfo) GetFormulaWgtRecCount() (int64, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return 0, err
+	if d == nil || d.db == nil {
+		return 0, errors.New("db connection is nil")
 	}
-	sqlDB, _ := db.DB()
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var count int64
-	err = db.Model(&FormulaWgtRecHeader{}).Count(&count).Error
+	err := db.Model(&FormulaWgtRecHeader{}).Count(&count).Error
 	return count, err
 }
 
 
 // 根据recId将配方标记为未使用
 func (d *DbFormulaInfo) DeleteFormulaByRecId(recId int) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -2553,17 +2144,10 @@ func (d *DbFormulaInfo) DeleteFormulaByRecId(recId int) error {
 // 根据recId删除所有配方
 // 根据recIds删除配方及其相关的暂存记录
 func (d *DbFormulaInfo) DeleteAllFormulaByRecId(recIds []int) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -2763,17 +2347,10 @@ type SetInputPort struct {
 }
 
 func (d *DbFormulaInfo) CreateSetAutoNext() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -2806,17 +2383,10 @@ func (d *DbFormulaInfo) CreateSetAutoNext() error {
 
 // 创建打印字段是否显示表
 func (d *DbFormulaInfo) CreateSetReportPrint() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 开启事务
 	tx := db.Begin()
 	if tx.Error != nil {
@@ -2856,17 +2426,10 @@ func (d *DbFormulaInfo) CreateSetReportPrint() error {
 
 // 修改打印字段是否显示表
 func (d *DbFormulaInfo) UpdateSetReportPrint(setReportPrint SetReportPrint) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	tx := db.Begin()
 	if tx.Error != nil {
 		return tx.Error
@@ -2898,17 +2461,10 @@ func (d *DbFormulaInfo) UpdateSetReportPrint(setReportPrint SetReportPrint) erro
 
 // 查询SetReportPrint
 func (d *DbFormulaInfo) GetSetReportPrint() (*SetReportPrint, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	var setReportPrint SetReportPrint
 	if err := db.First(&setReportPrint).Error; err != nil {
 		return nil, err
@@ -2918,17 +2474,10 @@ func (d *DbFormulaInfo) GetSetReportPrint() (*SetReportPrint, error) {
 
 // 修改SetAutoNext
 func (d *DbFormulaInfo) UpdateSetAutoNext(autoNext bool, stableTime int, autoTare bool, checkCode bool) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -2952,17 +2501,10 @@ func (d *DbFormulaInfo) UpdateSetAutoNext(autoNext bool, stableTime int, autoTar
 
 // 查询SetAutoNext
 func (d *DbFormulaInfo) GetSetAutoNext() (*SetAutoNext, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 查询
 	var setAutoNext SetAutoNext
@@ -2983,14 +2525,10 @@ func (d *DbFormulaInfo) GetUnstableZeroTare() (bool, error) {
 
 // 更新不稳定归零扣重开关
 func (d *DbFormulaInfo) UpdateUnstableZeroTare(enable bool) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, _ := db.DB()
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 更新第一条记录（通常配置表只有一条记录）
 	return db.Model(&SetAutoNext{}).Where("1 = 1").Update("unstable_zero_tare", enable).Error
@@ -3000,34 +2538,20 @@ func (d *DbFormulaInfo) UpdateUnstableZeroTare(enable bool) error {
 
 // 新增暂存配方称重记录头
 func (d *DbFormulaInfo) CreateDraftFmaWgtRecHeader(header DrafFmaWgtRecHeader) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	return db.Create(&header).Error
 }
 
 // 新增暂存配方称重记录详情
 func (d *DbFormulaInfo) CreateDraftFmaWgtRecDetail(detail DrafFmaWgtRecDetail) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	return db.Create(&detail).Error
 }
@@ -3035,27 +2559,20 @@ func (d *DbFormulaInfo) CreateDraftFmaWgtRecDetail(detail DrafFmaWgtRecDetail) e
 // 查询所有的暂存配方称重记录头和明细 List
 func (d *DbFormulaInfo) GetAllDraftFmaWgtRecLists() ([]DrafFmaWgtRecInfo, error) {
 	var draftFmaWgtRecLists []DrafFmaWgtRecInfo
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	var headers []DrafFmaWgtRecHeader
-	err = db.Find(&headers).Error
+	err := db.Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
 
 	for _, header := range headers {
 		var details []DrafFmaWgtRecDetail
-		err = db.Where("order_id = ?", header.OrderId).Find(&details).Error
+		err := db.Where("order_id = ?", header.OrderId).Find(&details).Error
 		if err != nil {
 			return nil, err
 		}
@@ -3070,17 +2587,10 @@ func (d *DbFormulaInfo) GetAllDraftFmaWgtRecLists() ([]DrafFmaWgtRecInfo, error)
 
 // 分页与全局排序查询 DrafFmaWgtRecInfo
 func (d *DbFormulaInfo) GetDraftFmaWgtRecByPage(req ReqGetDraftFormulaRecByPage) (*RespDraftFormulaRecByPage, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	pageSize := req.PageSize
 	if pageSize <= 0 {
@@ -3135,7 +2645,7 @@ func (d *DbFormulaInfo) GetDraftFmaWgtRecByPage(req ReqGetDraftFormulaRecByPage)
 	}
 
 	var headers []DrafFmaWgtRecHeader
-	err = query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&headers).Error
+	err := query.Order(orderClause).Limit(pageSize).Offset(offset).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
@@ -3173,17 +2683,10 @@ func (d *DbFormulaInfo) GetAllDraftFmaWgtRecListsStream(req ReqGetDraftFormulaRe
 		chunkSize = 2000
 	}
 
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	sortMap := map[string]string{
 		"orderId":   "order_id",
@@ -3234,7 +2737,7 @@ func (d *DbFormulaInfo) GetAllDraftFmaWgtRecListsStream(req ReqGetDraftFormulaRe
 		offset := i * chunkSize
 
 		var headers []DrafFmaWgtRecHeader
-		err = query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&headers).Error
+		err := query.Order(orderClause).Limit(chunkSize).Offset(offset).Find(&headers).Error
 		if err != nil {
 			return err
 		}
@@ -3297,26 +2800,19 @@ func (d *DbFormulaInfo) GetAllDraftFmaWgtRecListsStream(req ReqGetDraftFormulaRe
 // 查询暂存配方称重记录ByOrderId
 func (d *DbFormulaInfo) GetDraftFmaWgtRecByOrderId(orderIds []string) ([]DrafFmaWgtRecInfo, error) {
 	var draftFmaWgtRecLists []DrafFmaWgtRecInfo
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 查询暂存配方称重记录头
 	var headers []DrafFmaWgtRecHeader
-	err = db.Where("order_id IN ?", orderIds).Find(&headers).Error
+	err := db.Where("order_id IN ?", orderIds).Find(&headers).Error
 	if err != nil {
 		return nil, err
 	}
 	for _, header := range headers {
 		var details []DrafFmaWgtRecDetail
-		err = db.Where("order_id = ?", header.OrderId).Find(&details).Error
+		err := db.Where("order_id = ?", header.OrderId).Find(&details).Error
 		if err != nil {
 			return nil, err
 		}
@@ -3330,17 +2826,10 @@ func (d *DbFormulaInfo) GetDraftFmaWgtRecByOrderId(orderIds []string) ([]DrafFma
 
 // 根据order_id删除某一条记录
 func (d *DbFormulaInfo) DeleteDraftFmaWgtRec(orderId string) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -3363,17 +2852,10 @@ func (d *DbFormulaInfo) DeleteDraftFmaWgtRec(orderId string) error {
 
 // 删除所有暂存配方
 func (d *DbFormulaInfo) DeleteAllDraftFmaWgtRec(orderIds []string) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 开启事务
 	tx := db.Begin()
 	if tx.Error != nil {
@@ -3394,17 +2876,10 @@ func (d *DbFormulaInfo) DeleteAllDraftFmaWgtRec(orderIds []string) error {
 
 // 更新暂存配方称重记录头和明细
 func (d *DbFormulaInfo) UpdateDraftFmaWgtRec(rec DrafFmaWgtRecInfo) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -3440,17 +2915,10 @@ func (d *DbFormulaInfo) UpdateDraftFmaWgtRec(rec DrafFmaWgtRecInfo) error {
 }
 
 func (d *DbFormulaInfo) CheckFormulaRawData(scaleId int) (bool, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return false, err
+	if d == nil || d.db == nil {
+		return false, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return false, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 检查配方材料里面是否使用了这个秤
 	var count int64
 	db.Model(&RawMaterial{}).Where("scale_id = ?", scaleId).Count(&count)
@@ -3464,17 +2932,10 @@ func (d *DbFormulaInfo) CheckFormulaRawData(scaleId int) (bool, error) {
 // 根据原料ID获取原料信息
 func (d *DbFormulaInfo) GetRawDataByRawID(rawId string) (RawMaterial, error) {
 	var raw RawMaterial
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return raw, err
+	if d == nil || d.db == nil {
+		return RawMaterial{}, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return raw, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 查询原料信息
 	if err := db.Where("material_id = ?", rawId).First(&raw).Error; err != nil {
 		return raw, err
@@ -3484,17 +2945,10 @@ func (d *DbFormulaInfo) GetRawDataByRawID(rawId string) (RawMaterial, error) {
 
 // 创建一个新的上传服务器信息 服务器信息只能有一个，如果有则覆盖
 func (d *DbFormulaInfo) CreateUploadServerInfo(info UploadServerInfo) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 开启事务
 	tx := db.Begin()
 	if tx.Error != nil {
@@ -3522,17 +2976,10 @@ func (d *DbFormulaInfo) CreateUploadServerInfo(info UploadServerInfo) error {
 // 获取上传服务器信息 如果不存在则返回空结构体
 func (d *DbFormulaInfo) GetUploadServerInfo() (UploadServerInfo, error) {
 	var info UploadServerInfo
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return info, err
+	if d == nil || d.db == nil {
+		return UploadServerInfo{}, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return info, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 查询上传服务器信息
 	if err := db.First(&info).Error; err != nil {
 		return info, err
@@ -3542,17 +2989,10 @@ func (d *DbFormulaInfo) GetUploadServerInfo() (UploadServerInfo, error) {
 
 // 修改上传服务器信息
 func (d *DbFormulaInfo) UpdateUploadServerInfo(info UploadServerInfo) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 开启事务
 	tx := db.Begin()
 	if tx.Error != nil {
@@ -3577,17 +3017,10 @@ func (d *DbFormulaInfo) UpdateUploadServerInfo(info UploadServerInfo) error {
 
 // //////// 配方秤输出口设置的增删改查
 func (d *DbFormulaInfo) CreateSetOutputPort() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -3622,17 +3055,10 @@ func (d *DbFormulaInfo) CreateSetOutputPort() error {
 }
 
 func (d *DbFormulaInfo) GetSetOutputPort() ([]SetOutputPort, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 查询 SetOutputPort 表中的所有数据
 	var ports []SetOutputPort
@@ -3645,17 +3071,10 @@ func (d *DbFormulaInfo) GetSetOutputPort() ([]SetOutputPort, error) {
 
 // SetOutputPort
 func (d *DbFormulaInfo) UpdateSetOutputPort(ports []SetOutputPort) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -3692,17 +3111,10 @@ func (d *DbFormulaInfo) UpdateSetOutputPort(ports []SetOutputPort) error {
 
 // //////// 配方秤输入口设置的增删改查
 func (d *DbFormulaInfo) CreateSetInputPort() error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 开启事务
 	tx := db.Begin()
@@ -3736,17 +3148,10 @@ func (d *DbFormulaInfo) CreateSetInputPort() error {
 
 // GetSetInputPort
 func (d *DbFormulaInfo) GetSetInputPort() ([]SetInputPort, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 
 	// 查询 SetInputPort 表中的所有数据
 	var ports []SetInputPort
@@ -3758,17 +3163,10 @@ func (d *DbFormulaInfo) GetSetInputPort() ([]SetInputPort, error) {
 
 // SetInputPort
 func (d *DbFormulaInfo) UpdateSetInputPort(ports []SetInputPort) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+	db := d.db
 	// 开启事务
 	tx := db.Begin()
 	if tx.Error != nil {

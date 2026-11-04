@@ -5,12 +5,12 @@ import (
 	"time"
 	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type DbDetailRec struct {
 	dbName string
+	db     *gorm.DB
 }
 
 type DetailRec struct {
@@ -57,40 +57,34 @@ type DetailList struct {
 }
 
 func NewDbDetailRec(dbName string) (*DbDetailRec, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
-		l.Log.Debug("failed to connect database")
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
+		return nil, err
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
-
 	if err = db.AutoMigrate(&DetailRec{}, &DetailTotal{}); err != nil {
-		l.Log.Debug("failed to migrate database of detail recs")
+		l.Log.Errorf("failed to migrate database of detail recs: %v", err)
 	}
-	return &DbDetailRec{dbName: dbName}, nil
+	return &DbDetailRec{dbName: dbName, db: db}, nil
+}
+
+func (d *DbDetailRec) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
 }
 
 func (d *DbDetailRec) GetDetailRecsList() ([]DetailList, error) {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
-	defer func() {
-		sqlDB, err := db.DB()
-		if err == nil && sqlDB != nil {
-			sqlDB.Close()
-		}
-	}()
 
 	var totals []DetailTotal
-	err = db.Find(&totals).Error
+	err := d.db.Find(&totals).Error
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +92,7 @@ func (d *DbDetailRec) GetDetailRecsList() ([]DetailList, error) {
 	var detailLists []DetailList
 	for _, total := range totals {
 		var details []DetailRec
-		err = db.Where("scale_model =? AND scale_sn =? AND settle_account_times =?", total.ScaleModel, total.ScaleSn, total.SettleAccountTimes).Find(&details).Error
+		err = d.db.Where("scale_model =? AND scale_sn =? AND settle_account_times =?", total.ScaleModel, total.ScaleSn, total.SettleAccountTimes).Find(&details).Error
 		if err != nil {
 			return nil, err
 		}
@@ -109,20 +103,10 @@ func (d *DbDetailRec) GetDetailRecsList() ([]DetailList, error) {
 }
 
 func (d *DbDetailRec) InsertDetailRec(rec DetailRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	tx := db.Create(&rec)
+	tx := d.db.Create(&rec)
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -130,18 +114,10 @@ func (d *DbDetailRec) InsertDetailRec(rec DetailRec) error {
 }
 
 func (d *DbDetailRec) InsertDetailTotal(total DetailTotal) error {
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	defer func() {
-		sqlDB, err := db.DB()
-		if err == nil && sqlDB != nil {
-			sqlDB.Close()
-		}
-	}()
-
-	tx := db.Create(&total)
+	tx := d.db.Create(&total)
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -149,19 +125,10 @@ func (d *DbDetailRec) InsertDetailTotal(total DetailTotal) error {
 }
 
 func (d *DbDetailRec) UpdateDetailRec(rec ScaleRec) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	rowAffected := db.Model(&rec).Where("rec_id=?", rec.RecId).Updates(&rec).RowsAffected
+	rowAffected := d.db.Model(&rec).Where("rec_id=?", rec.RecId).Updates(&rec).RowsAffected
 	if rowAffected == 0 {
 		return errors.New("@UpdateScaleRec failed, mybe record not existing")
 	}
@@ -169,46 +136,18 @@ func (d *DbDetailRec) UpdateDetailRec(rec ScaleRec) error {
 }
 
 func (d *DbDetailRec) DeleteDetailRec(id uint) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
 	var rec ScaleRec
 	rec.RecId = id
-	db.Where("rec_id=?", id).Delete((&rec))
-	return nil
+	return d.db.Where("rec_id=?", id).Delete(&rec).Error
 }
 
 func (d *DbDetailRec) DeleteAllDetailRec(scaleModel string, scaleSn string) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		l.Log.Debug("failed to connect database")
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-
-	// err = db.Migrator().DropTable(&ScaleRec{})
-	// if err != nil {
-	// 	l.Log.Debug("failed to drop database")
-	// }
-
 	var rec ScaleRec
-	db.Where("scale_model = ? AND scale_sn = ?", scaleModel, scaleSn).Delete(&rec)
-
-	return nil
+	return d.db.Where("scale_model = ? AND scale_sn = ?", scaleModel, scaleSn).Delete(&rec).Error
 }

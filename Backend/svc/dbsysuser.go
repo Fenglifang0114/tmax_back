@@ -2,11 +2,11 @@ package svc
 
 import (
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"time"
 	l "tmaxsrv/log"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -14,6 +14,7 @@ import (
 
 type DbSysUser struct {
 	dbName string
+	db     *gorm.DB
 }
 
 // 角色表
@@ -60,45 +61,43 @@ type SysOperatorPage struct {
 }
 
 func NewDbSysUser(dbName string) (*DbSysUser, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := openDatabase(dbName)
 	if err != nil {
-		l.Log.Debug("failed to connect database")
+		l.Log.Errorf("failed to connect database %s: %v", dbName, err)
+		return nil, err
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		l.Log.Debug("failed to connect database")
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// Migrate the schema
 	if err = db.AutoMigrate(
 		&SysRole{},
 		&SysUser{},
 		&SysOperatorPage{},
 	); err != nil {
-		l.Log.Debug("failed to migrate database of scale connection")
+		l.Log.Errorf("failed to migrate database: %v", err)
 	}
-	sysUser := &DbSysUser{dbName: dbName}
+	sysUser := &DbSysUser{dbName: dbName, db: db}
 	initRoles(sysUser)
-	// 初始化管理员账号
 	initAdmin(sysUser)
 
-	return &DbSysUser{dbName: dbName}, nil
+	return sysUser, nil
+}
+
+func (d *DbSysUser) Close() error {
+	if d != nil && d.db != nil {
+		sqlDB, err := d.db.DB()
+		if err == nil && sqlDB != nil {
+			return sqlDB.Close()
+		}
+	}
+	return nil
 }
 
 // 初始化三种角色
 func initRoles(sysUser *DbSysUser) error {
-	var roleCount int64
 	roles, err := sysUser.ListAllRoles()
 	if err != nil {
 		return err
 	}
-	roleCount = int64(len(roles))
-	if roleCount == 0 {
-		// 初始化三种角色
-		roles := []SysRole{
+	if len(roles) == 0 {
+		defaultRoles := []SysRole{
 			{
 				RoleName:   "super_admin",
 				IsFullPerm: 1,
@@ -113,7 +112,7 @@ func initRoles(sysUser *DbSysUser) error {
 			},
 		}
 
-		for _, role := range roles {
+		for _, role := range defaultRoles {
 			if err := sysUser.CreateRole(&role); err != nil {
 				l.Log.Printf("failed to create role: %v", err)
 				return err
@@ -122,37 +121,25 @@ func initRoles(sysUser *DbSysUser) error {
 		l.Log.Debug("ok")
 	} else {
 		l.Log.Debug("role already initialized")
-
 	}
 	return nil
 }
 
 // 初始化管理员
 func initAdmin(sysUser *DbSysUser) error {
-	// 检查管理员账号是否已存在
+	if sysUser == nil || sysUser.db == nil {
+		return errors.New("db connection is nil")
+	}
 	var count int64
-	db, err := gorm.Open(sqlite.Open(sysUser.dbName), &gorm.Config{})
-	if err != nil {
-		return err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	db.Model(&SysUser{}).Count(&count)
+	sysUser.db.Model(&SysUser{}).Count(&count)
 	if count > 1 {
-		//修改管理员的isChanged为true
-		db.Model(&SysUser{}).Where("user_id = ?", 1).Update("is_changed", true)
+		sysUser.db.Model(&SysUser{}).Where("user_id = ?", 1).Update("is_changed", true)
 		return nil
 	}
 	if count > 0 {
 		return nil
 	}
 
-	// 初始化管理员账号
 	admin := &SysUser{
 		UserName:      "Super Admin",
 		NickName:      "Super Admin",
@@ -164,7 +151,6 @@ func initAdmin(sysUser *DbSysUser) error {
 		Remark:        "super admin",
 	}
 
-	// 初始化管理员账号
 	if err := sysUser.CreateUser(admin); err != nil {
 		return err
 	}
@@ -173,108 +159,56 @@ func initAdmin(sysUser *DbSysUser) error {
 
 // 创建角色(初始化时使用，因为角色固定为三种)
 func (d *DbSysUser) CreateRole(role *SysRole) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	if err = db.Create(role).Error; err != nil {
-		return err
-	}
-	return nil
+	return d.db.Create(role).Error
 }
 
 // 获取所有角色
 func (d *DbSysUser) ListAllRoles() ([]SysRole, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []SysRole{}, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []SysRole{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return []SysRole{}, errors.New("db connection is nil")
 	}
 	var roles []SysRole
-	result := db.Find(&roles)
+	result := d.db.Find(&roles)
 	return roles, result.Error
 }
 
 // 创建用户
 func (d *DbSysUser) CreateUser(user *SysUser) error {
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
+	}
 	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// 密码加密
-
 	user.Password, err = EncryptPassword(user.Password)
 	if err != nil {
 		return err
 	}
 
-	if err = db.Create(user).Error; err != nil {
-		return err
-	}
-	return nil
+	return d.db.Create(user).Error
 }
 
 // 获取用户信息(通过用户名)
 func (d *DbSysUser) GetUserByUsername(userName string) (*SysUser, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 	var user SysUser
-	result := db.First(&user, "user_name = ?", userName)
+	result := d.db.First(&user, "user_name = ?", userName)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return &user, nil
 }
 
-// 获取用户信息(通过用户名)
+// 获取用户信息(通过用户ID)
 func (d *DbSysUser) GetUserByUserId(userId int) (*SysUser, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 	var user SysUser
-	result := db.First(&user, "user_id = ?", userId)
+	result := d.db.First(&user, "user_id = ?", userId)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -283,20 +217,11 @@ func (d *DbSysUser) GetUserByUserId(userId int) (*SysUser, error) {
 
 // 获取用户信息(通过RFID卡号)
 func (d *DbSysUser) GetUserByRfid(rfid string) (*SysUser, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return nil, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return nil, errors.New("db connection is nil")
 	}
 	var user SysUser
-	result := db.First(&user, "rfid = ?", rfid)
+	result := d.db.First(&user, "rfid = ?", rfid)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -305,59 +230,52 @@ func (d *DbSysUser) GetUserByRfid(rfid string) (*SysUser, error) {
 
 // 获取多个用户详情
 func (d *DbSysUser) GetManyUserByUserIds(userIds []int) ([]SysUser, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []SysUser{}, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []SysUser{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return []SysUser{}, errors.New("db connection is nil")
 	}
 	var users []SysUser
-	result := db.Find(&users, "user_id IN ?", userIds)
+	result := d.db.Find(&users, "user_id IN ?", userIds)
 	return users, result.Error
 }
 
 // 更新用户
-
 func (d *DbSysUser) UpdateUser(user *SysUser, pswUpdated bool) error {
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
+	}
 
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return fmt.Errorf("fail to update user: %w", err)
-
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("fail to update user: %w", err)
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	// 1. 验证用户是否存在
 	var existingUser SysUser
-	result := db.Model(&SysUser{}).Where("user_id = ?", user.UserId).First(&existingUser)
+	result := d.db.Model(&SysUser{}).Where("user_id = ?", user.UserId).First(&existingUser)
 	if result.Error != nil {
 		return fmt.Errorf("fail to update user: %w", result.Error)
 	}
-	// 1. 密码加密
+	updateMap := map[string]interface{}{
+		"user_name":       user.UserName,
+		"nick_name":       user.NickName,
+		"role_id":         user.RoleId,
+		"is_enabled":      user.IsEnabled,
+		"email":           user.Email,
+		"phone":           user.Phone,
+		"initial_page_id": user.InitialPageId,
+		"remark":          user.Remark,
+		"updated_by":      user.UpdatedBy,
+		"updated_by_name": user.UpdatedByName,
+		"rfid":            user.Rfid,
+		"updated_time":    time.Now(),
+	}
+
 	if pswUpdated {
 		encryptedPassword, err := EncryptPassword(user.Password)
 		if err != nil {
 			return fmt.Errorf("fail to update user: %w", err)
 		}
-		user.Password = encryptedPassword
-		user.IsChanged = true
+		updateMap["password"] = encryptedPassword
+		updateMap["is_changed"] = true
 	}
 
-	// 2. 执行更新操作（仅更新提供的字段）
-	result = db.Model(&SysUser{}).
-		Where("user_id = ?", user.UserId). // 明确指定更新条件
-		Updates(user)                      // 使用map传递需要更新的字段
+	result = d.db.Model(&SysUser{}).
+		Where("user_id = ?", user.UserId).
+		Updates(updateMap)
 	if result.Error != nil {
 		return fmt.Errorf("fail to update user: %w", result.Error)
 	}
@@ -367,27 +285,17 @@ func (d *DbSysUser) UpdateUser(user *SysUser, pswUpdated bool) error {
 
 // 删除用户(软删除)
 func (d *DbSysUser) DeleteUser(userID []int) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 	for _, id := range userID {
 		if id == 1 {
 			continue
 		}
-		if err = db.Delete(&SysUser{}, "user_id = ?", id).Error; err != nil {
+		if err := d.db.Delete(&SysUser{}, "user_id = ?", id).Error; err != nil {
 			return err
 		}
 	}
-	// 删除用户页面权限
 	for _, id := range userID {
 		if err := d.ClearAllPagePermissions(id); err != nil {
 			return err
@@ -399,61 +307,37 @@ func (d *DbSysUser) DeleteUser(userID []int) error {
 
 // 查询用户列表
 func (d *DbSysUser) ListUsers() ([]SysUser, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return []SysUser{}, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return []SysUser{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return []SysUser{}, errors.New("db connection is nil")
 	}
 	var users []SysUser
-	result := db.Find(&users)
+	result := d.db.Find(&users)
 	if result.Error != nil {
-		return []SysUser{}, err
+		return []SysUser{}, result.Error
 	}
-	if result.RowsAffected == 0 {
-		return []SysUser{}, err
-	}
-	return users, result.Error
+	return users, nil
 }
 
 // 修改密码
 func (d *DbSysUser) ChangePassword(userId int, newPassword string) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return fmt.Errorf("failed to connect database: %w", err)
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get database instance: %w", err)
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
-	// 查询用户信息
 	var user SysUser
-	result := db.First(&user, "user_id = ?", userId)
+	result := d.db.First(&user, "user_id = ?", userId)
 	if result.Error != nil {
 		return fmt.Errorf("user not found: %w", result.Error)
 	}
 
-	// 加密新密码
 	hashedNewPassword, err := EncryptPassword(newPassword)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt new password: %w", err)
 	}
 
-	// 更新密码
 	user.Password = hashedNewPassword
 	user.IsChanged = true
-	err = db.Save(&user).Error
+	err = d.db.Save(&user).Error
 	if err != nil {
 		return fmt.Errorf("failed to update password: %w", err)
 	}
@@ -462,24 +346,13 @@ func (d *DbSysUser) ChangePassword(userId int, newPassword string) error {
 }
 
 // 禁用用户
-
 func (d *DbSysUser) DisableUser(userID int, isEnabled bool, updateBy int, updateByName string) error {
-
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return fmt.Errorf("failed to connect database: %w", err)
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get database instance: %w", err)
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
 	var user SysUser
-	result := db.First(&user, "user_id = ?", userID)
+	result := d.db.First(&user, "user_id = ?", userID)
 	if result.Error != nil {
 		return fmt.Errorf("user not found: %w", result.Error)
 	}
@@ -487,7 +360,7 @@ func (d *DbSysUser) DisableUser(userID int, isEnabled bool, updateBy int, update
 	user.IsEnabled = isEnabled
 	user.UpdatedBy = updateBy
 	user.UpdatedByName = updateByName
-	if err := db.Save(&user).Error; err != nil {
+	if err := d.db.Save(&user).Error; err != nil {
 		return fmt.Errorf("failed to disable user: %w", err)
 	}
 
@@ -496,24 +369,13 @@ func (d *DbSysUser) DisableUser(userID int, isEnabled bool, updateBy int, update
 
 // 撤销操作员的页面权限
 func (d *DbSysUser) updateUserPermission(userID int, pageIDList []int) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
 
-	//删除用户的所有页面权限
-	db.Delete(&SysOperatorPage{}, "user_id = ?", userID)
-	//添加用户的页面权限
+	d.db.Delete(&SysOperatorPage{}, "user_id = ?", userID)
 	for _, pageID := range pageIDList {
-		db.Create(&SysOperatorPage{
+		d.db.Create(&SysOperatorPage{
 			UserId: userID,
 			PageId: pageID,
 		})
@@ -523,41 +385,23 @@ func (d *DbSysUser) updateUserPermission(userID int, pageIDList []int) error {
 
 // 清空操作员的所有页面权限
 func (d *DbSysUser) ClearAllPagePermissions(userID int) error {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return err
+	if d == nil || d.db == nil {
+		return errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
-	return db.Delete(&SysOperatorPage{}, "user_id = ?", userID).Error
+	return d.db.Delete(&SysOperatorPage{}, "user_id = ?", userID).Error
 }
 
 // 验证用户名和密码
 func (d *DbSysUser) Login(userName string, password string) (bool, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return false, err
+	if d == nil || d.db == nil {
+		return false, errors.New("db connection is nil")
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return false, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
-	}
+
 	var user SysUser
-	result := db.First(&user, "user_name = ?", userName)
+	result := d.db.First(&user, "user_name = ?", userName)
 	if result.Error != nil {
 		return false, fmt.Errorf("user or password error")
 	}
-	//验证用户是否可用
 	if !user.IsEnabled {
 		return false, fmt.Errorf("user or password error")
 	}
@@ -566,14 +410,12 @@ func (d *DbSysUser) Login(userName string, password string) (bool, error) {
 		return false, err
 	}
 
-	// 比较加密后的密码
 	if user.Password != hashedPassword {
 		return false, fmt.Errorf("user or password error")
 	}
 	return true, nil
 }
 
-// 查询一个用用户的信息和角色信息，还有权限信息融合在一个信息里面
 type userRolePermission struct {
 	UserID        int    `json:"userId"`
 	UserName      string `json:"userName"`
@@ -590,47 +432,34 @@ type userRolePermission struct {
 }
 
 func (d *DbSysUser) GetUserRolePermission(userName string) (userRolePermission, error) {
-	var err error
-	db, err := gorm.Open(sqlite.Open(d.dbName), &gorm.Config{})
-	if err != nil {
-		return userRolePermission{}, err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return userRolePermission{}, err
-	}
-	if sqlDB != nil {
-		defer sqlDB.Close()
+	if d == nil || d.db == nil {
+		return userRolePermission{}, errors.New("db connection is nil")
 	}
 
-	// 1. 查询用户基本信息
 	var sysUser SysUser
-	result := db.Model(&SysUser{}).
+	result := d.db.Model(&SysUser{}).
 		Where("user_name = ?", userName).
 		First(&sysUser)
 	if result.Error != nil {
 		return userRolePermission{}, fmt.Errorf("查询用户信息失败: %w", result.Error)
 	}
 
-	// 2. 根据用户的role_id查询角色信息
 	var sysRole SysRole
-	result = db.Model(&SysRole{}).
+	result = d.db.Model(&SysRole{}).
 		Where("role_id = ?", sysUser.RoleId).
 		First(&sysRole)
 	if result.Error != nil {
 		return userRolePermission{}, fmt.Errorf("查询角色信息失败: %w", result.Error)
 	}
 
-	// 查询用户可访问的页面 ID 列表
 	var pageIDs []int
-	err = db.Model(&SysOperatorPage{}).
+	err := d.db.Model(&SysOperatorPage{}).
 		Where("user_id = ?", sysUser.UserId).
 		Pluck("page_id", &pageIDs).Error
 	if err != nil {
 		return userRolePermission{}, fmt.Errorf("fail to query page ids: %w", err)
 	}
 
-	// 3. 合并结果
 	user := userRolePermission{
 		UserID:        sysUser.UserId,
 		UserName:      sysUser.UserName,
@@ -649,14 +478,11 @@ func (d *DbSysUser) GetUserRolePermission(userName string) (userRolePermission, 
 	return user, nil
 }
 
-// 加密过程
 const Seed_TS = "*T-Scale*" // 固定 cost 值
 
 func EncryptPassword(password string) (string, error) {
 	pswStr := password + Seed_TS
 	hashedPassword := md5.Sum([]byte(pswStr))
-
-	// 将MD5字节数组转换为32位十六进制字符串
 	hashedPasswordStr := fmt.Sprintf("%x", hashedPassword)
 	return hashedPasswordStr, nil
 }
