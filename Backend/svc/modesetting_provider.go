@@ -16,6 +16,11 @@ var (
 
 func NewModeSettingProvider() *ModeSettingProvider {
 	settingPb, _ := NewDbModeSetting(MODE_SETTING_DB_FILE)
+	if settingPb != nil {
+		for mode := uint(0); mode <= 3; mode++ {
+			_, _ = settingPb.GetModeSetting(mode)
+		}
+	}
 	return &ModeSettingProvider{myId: "ModeSettingProvider", settingPb: settingPb}
 }
 

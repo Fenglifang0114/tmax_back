@@ -8,6 +8,7 @@
 *.so
 *.dylib
 tmaxsrv
+tmaxsrv_mac
 ui
 # backup file
 *.bak

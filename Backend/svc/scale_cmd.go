@@ -207,6 +207,55 @@ func (c *Scale) UpdateFirmwareOld(name string) (*ScaleRespMsg, error) {
 
 func (c *Scale) CheckSerialPort() (*ScaleRespMsg, error) {
 	l.Log.Debug("check serial port")
+
+	// 1. 蓝牙连接特殊处理
+	if c.Conn != nil && c.Conn.TMedia == MEDIA_BT {
+		// 检查底层物理蓝牙连接状态
+		btAlive := false
+		if c.MyBluetooth != nil {
+			btAlive = c.MyBluetooth.GetConnectionStatus()
+		}
+
+		if !btAlive {
+			l.Log.Warnf("蓝牙秤 (Id: %d) 物理连接尚未建立", c.Id)
+			c.Conn.IsOnline = false
+			return &ScaleRespMsg{MsgType: m.CHECK_SERIAL_PORT_RESP, MsgBody: "fail", ScaleId: c.Id}, nil
+		}
+
+		// 蓝牙底层已连接，更新在线状态
+		c.Conn.IsOnline = true
+
+		// 尝试探测 T-Max 协议出厂信息
+		var factoryInfo FIFromScale
+		modelName := c.Conn.InnerModel
+		if modelName == "" {
+			modelName = c.Conn.CustomModel
+		}
+		if modelName == "" {
+			modelName = "BT-Scale"
+		}
+
+		reqMsg, _ := excuteSimpCmd(c, m.CMD_GET_FACTORY_INFO, m.GET_FACTORY_INFO_RESP)
+		if reqMsg.MsgBody != nil {
+			msgBodyStr, _ := reqMsg.MsgBody.(string)
+			var dataStruct FIFromScale
+			if err := json.UnmarshalFromString(msgBodyStr, &dataStruct); err == nil && dataStruct.ModelName != "" {
+				modelName = dataStruct.ModelName
+				c.scaleMgr.UpdateScaleSn(ReqModifyScaleSn{
+					ScaleId:    c.Id,
+					InnerModel: dataStruct.ModelName,
+					Sn:         dataStruct.ScaleSn,
+				})
+			}
+		}
+
+		factoryInfo.ModelName = modelName
+		factoryInfo.ScaleSn = c.Sn
+		msgBody, _ := json.MarshalToString(factoryInfo)
+		return &ScaleRespMsg{MsgType: m.CHECK_SERIAL_PORT_RESP, MsgBody: msgBody, ScaleId: c.Id}, nil
+	}
+
+	// 2. C51 协议处理
 	if c.ScaleCat == m.SCALE_C51 {
 		if !c.Conn.IsOnline {
 			return &ScaleRespMsg{MsgType: m.CHECK_SERIAL_PORT_RESP, MsgBody: "fail", ScaleId: c.Id}, nil
@@ -231,6 +280,7 @@ func (c *Scale) CheckSerialPort() (*ScaleRespMsg, error) {
 		return &ScaleRespMsg{MsgType: m.CHECK_SERIAL_PORT_RESP, MsgBody: msgBody, ScaleId: c.Id}, nil
 	}
 
+	// 3. TMax 串口秤与默认协议处理
 	reqMsg, _ := excuteSimpCmd(c, m.CMD_GET_FACTORY_INFO, m.GET_FACTORY_INFO_RESP)
 	if reqMsg.MsgBody == nil {
 		return &ScaleRespMsg{MsgType: m.CHECK_SERIAL_PORT_RESP, MsgBody: "fail", ScaleId: c.Id}, nil

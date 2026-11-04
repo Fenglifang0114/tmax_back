@@ -1054,6 +1054,7 @@ func (s *ScaleMgr) Run() {
 		// portsNotInUse := handlePortState(&ports, &s.conns)
 		// portsNotInUse := handlePortState(&ports, &s.medias)
 		_ = handleNetState(&s.medias)
+		handleBtState(&s.medias)
 		// fmt.Printf("portsNotInUse:  %v\n", portsNotInUse)
 		// TODO: scan ports for finding scales and handle new finding scales
 
@@ -1276,6 +1277,31 @@ func handleNetState(conns *[]*ScaleConnMedia) (netsNotInUse []string) {
 	}
 
 	return
+}
+
+func handleBtState(conns *[]*ScaleConnMedia) {
+	if conns == nil {
+		return
+	}
+	for i := range *conns {
+		conn := (*conns)[i]
+		if conn == nil || conn.TMedia != MEDIA_BT {
+			continue
+		}
+
+		if conn.scale == nil || conn.scale.MyBluetooth == nil {
+			if conn.IsOnline {
+				conn.IsOnline = false
+			}
+			continue
+		}
+
+		status := conn.scale.MyBluetooth.GetConnectionStatus()
+		if conn.IsOnline != status {
+			conn.IsOnline = status
+			log.Log.Infof("蓝牙秤 (Id: %d, %s) 在线状态变更 => %v", conn.ScaleId, conn.ScaleName, status)
+		}
+	}
 }
 
 func contains(s []string, e string) (int, bool) {

@@ -1,7 +1,6 @@
 package svc
 
 import (
-	"errors"
 	l "tmaxsrv/log"
 
 	"gorm.io/driver/sqlite"
@@ -69,6 +68,21 @@ func (d *DbModeSetting) GetModeSetting(scaleMode uint) ([]ModeSetting, error) {
 	// 读取内容
 	var setting []ModeSetting
 	db.Where("scale_mode=?", scaleMode).Find(&setting)
+	if len(setting) == 0 {
+		defaultSetting := ModeSetting{
+			ScaleMode:     scaleMode,
+			DateFormat:    "0",
+			DateSeparator: "-",
+			StableTime:    "1",
+			ZeroRange:     "1",
+			RecMode:       "0",
+			ScaleSn:       "",
+			SaveMode:      "0",
+			WgtMode:       0,
+		}
+		db.Create(&defaultSetting)
+		setting = append(setting, defaultSetting)
+	}
 	return setting, nil
 }
 
@@ -88,7 +102,7 @@ func (d *DbModeSetting) UpdateModeSetting(setting ModeSetting) error {
 	// 明确指定要更新的字段
 	rowAffected := db.Model(&setting).Where("scale_mode=?", setting.ScaleMode).Select("*").Updates(&setting).RowsAffected
 	if rowAffected == 0 {
-		return errors.New("@UpdateScaleRec failed, maybe record not existing")
+		return db.Create(&setting).Error
 	}
 	return nil
 }

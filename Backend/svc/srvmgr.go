@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -466,6 +467,11 @@ func (h *SrvMgr) Run() {
 }
 
 func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.Log.Errorf("Panic recovered in parseMsgAndTrigEvt: %v\nStack: %s", r, debug.Stack())
+		}
+	}()
 	var req Request
 	if err := json.UnmarshalFromString(reqJson, &req); err != nil {
 		l.Log.Error(err)
@@ -662,8 +668,23 @@ func parseMsgAndTrigEvt(scaleMgr *ScaleMgr, reqJson string) {
 		l.Log.Info("Got get UI Config request")
 		modeInt, _ := strconv.Atoi(req.ReqData)
 		modeUint := uint(modeInt)
-		config, _ := mSrvMgr.modeSetting.GetModeSetting(modeUint)
-		configStr, _ := json.MarshalToString(config[0])
+		config, err := mSrvMgr.modeSetting.GetModeSetting(modeUint)
+		var conf ModeSetting
+		if err == nil && len(config) > 0 {
+			conf = config[0]
+		} else {
+			conf = ModeSetting{
+				ScaleMode:     modeUint,
+				DateFormat:    "0",
+				DateSeparator: "-",
+				StableTime:    "1",
+				ZeroRange:     "1",
+				RecMode:       "0",
+				SaveMode:      "0",
+				WgtMode:       0,
+			}
+		}
+		configStr, _ := json.MarshalToString(conf)
 		mSrvMgr.recvScaleMgrMsg <- &ScaleMgrRespMsg{MsgType: SCALE_MGR_RESP_GET_UI_CONFIG, MsgBody: configStr}
 	case REQ_UPDATE_UI_CONF:
 		l.Log.Info("Got update UI Config request")
@@ -3965,8 +3986,16 @@ func (p exportAllRecsNotifier) Handle(mgr *SrvMgr, payload ReqExportAllRecs) {
 	}
 
 	//日期和分隔符的格式来源于config[0].DateFormat 和 config[0].Delimiter
-	dateFormat := config[0].DateFormat
-	delimiter := config[0].DateSeparator
+	dateFormat := "0"
+	delimiter := "-"
+	if len(config) > 0 {
+		if config[0].DateFormat != "" {
+			dateFormat = config[0].DateFormat
+		}
+		if config[0].DateSeparator != "" {
+			delimiter = config[0].DateSeparator
+		}
+	}
 
 	// 定义日期格式模板
 	var formatTemplate string

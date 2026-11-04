@@ -461,62 +461,49 @@ func (bt *TBluetooth) connectDevice() error {
 		var err error
 
 		if attempt == 1 {
-			// 第一次尝试：直接连接
-
-			btAddr, err := parseBTAddress(bt.deviceAddress)
-			if err != nil {
-				return fmt.Errorf("MAC地址格式错误: %v", err)
+			// 第一次尝试：直接使用地址连接
+			btAddr, parseErr := parseBTAddress(bt.deviceAddress)
+			if parseErr != nil {
+				return fmt.Errorf("MAC地址/UUID格式错误: %v", parseErr)
 			}
 
-			// 尝试连接
+			// 尝试连接（CoreBluetooth 仅当已知此 Peripheral 时成功）
 			device, err = bt.adapterRef.Connect(btAddr, bluetooth.ConnectionParams{
-				ConnectionTimeout: bluetooth.NewDuration(10 * time.Second),
+				ConnectionTimeout: bluetooth.NewDuration(4 * time.Second),
 			})
 
 			if err != nil {
-				log.Log.Warnf("直接连接设备 %s 失败 (%v)，将尝试扫描后重试连接...", bt.deviceAddress, err)
+				log.Log.Warnf("直接连接设备 %s 失败 (%v)，将启动快速定向扫描并连接...", bt.deviceAddress, err)
 				if attempt < maxRetries {
-					time.Sleep(1 * time.Second)
+					time.Sleep(500 * time.Millisecond)
 					continue
 				}
 				return fmt.Errorf("直接连接设备 %s 失败: %v", bt.deviceAddress, err)
 			}
 
 		} else {
-			// 后续尝试：扫描后连接
-			log.Log.Warnf("第%d次尝试：扫描后连接", attempt)
+			// 后续尝试：快速定向扫描目标设备，找到立即停止扫描并连接
+			log.Log.Infof("第%d次尝试：快速定向扫描目标设备并连接...", attempt)
 
-			scanMutex.Lock()
-			devices, scanErr := bt.scanDevicesWithAdapter(bt.adapterRef, 20*time.Second)
-			scanMutex.Unlock()
-
+			targetDevice, scanErr := bt.findTargetDeviceFast(bt.adapterRef, 6*time.Second)
 			if scanErr != nil {
-				log.Log.Errorf("扫描失败: %v", scanErr)
+				log.Log.Errorf("定向扫描失败: %v", scanErr)
 				continue
 			}
 
-			// 查找目标设备
-			var targetDevice bluetooth.ScanResult
-			found := false
-			for _, dev := range devices {
-				if dev.Address.String() == bt.deviceAddress {
-					targetDevice = dev
-					found = true
-					break
-				}
-			}
-			if !found {
-				log.Log.Warn("扫描后未找到目标设备")
+			if targetDevice == nil {
+				log.Log.Warnf("扫描完成，未发现目标设备: %s", bt.deviceAddress)
 				continue
 			}
 
+			log.Log.Infof("已定向发现目标设备: %s (%s)，立即建立连接...", targetDevice.Address.String(), targetDevice.LocalName())
 			device, err = bt.adapterRef.Connect(targetDevice.Address, bluetooth.ConnectionParams{
-				ConnectionTimeout: bluetooth.NewDuration(10 * time.Second),
+				ConnectionTimeout: bluetooth.NewDuration(6 * time.Second),
 			})
 		}
 
 		if err == nil {
-			// 连接成功
+			// 连接成功，配置服务与特征
 			return bt.setupDevice(device)
 		}
 
@@ -524,45 +511,150 @@ func (bt *TBluetooth) connectDevice() error {
 
 		// 如果不是最后一次尝试，等待后重试
 		if attempt < maxRetries {
-			time.Sleep(2 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}
 
 	return fmt.Errorf("连接设备失败，已尝试 %d 次", maxRetries)
 }
 
-// setupDevice 设置设备的服务和特征（从原函数提取的公共部分）
+// findTargetDeviceFast 快速定向扫描目标设备，一旦发现立即提前停止扫描
+func (bt *TBluetooth) findTargetDeviceFast(adapter *bluetooth.Adapter, timeout time.Duration) (*bluetooth.ScanResult, error) {
+	scanMutex.Lock()
+	defer scanMutex.Unlock()
+
+	// 停止可能残留的扫描
+	_ = adapter.StopScan()
+	time.Sleep(100 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	var target bluetooth.ScanResult
+	found := false
+	var foundMu sync.Mutex
+
+	cleanTargetAddr := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(bt.deviceAddress), "-", ""))
+
+	stopWatchdog := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = adapter.StopScan()
+		case <-stopWatchdog:
+		}
+	}()
+	defer close(stopWatchdog)
+
+	_ = adapter.Scan(func(a *bluetooth.Adapter, device bluetooth.ScanResult) {
+		devAddr := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(device.Address.String()), "-", ""))
+
+		// 比对地址（不区分大小写与破折号）
+		match := (devAddr == cleanTargetAddr)
+		if !match && len(cleanTargetAddr) >= 12 && len(devAddr) >= 12 {
+			match = strings.Contains(devAddr, cleanTargetAddr) || strings.Contains(cleanTargetAddr, devAddr)
+		}
+
+		if match {
+			foundMu.Lock()
+			target = device
+			found = true
+			foundMu.Unlock()
+
+			_ = a.StopScan()
+			cancel()
+		}
+	})
+
+	_ = adapter.StopScan()
+	time.Sleep(100 * time.Millisecond)
+
+	foundMu.Lock()
+	defer foundMu.Unlock()
+	if found {
+		return &target, nil
+	}
+	return nil, nil
+}
+
+// setupDevice 设置设备的服务和特征（自适应匹配与容错）
 func (bt *TBluetooth) setupDevice(device bluetooth.Device) error {
 	bt.mu.Lock()
 	bt.device = &device
 	bt.mu.Unlock()
 
-	// 发现服务
-	serviceUUID, err := bluetooth.ParseUUID(bt.serviceUUID)
-	if err != nil {
-		return fmt.Errorf("无效的服务UUID: %v", err)
-	}
-
-	services, err := device.DiscoverServices([]bluetooth.UUID{serviceUUID})
+	// 1. 发现设备的所有服务（传入 nil 获取全量服务，避免短 UUID 匹配格式不一致）
+	services, err := device.DiscoverServices(nil)
 	if err != nil || len(services) == 0 {
-		return fmt.Errorf("未找到服务 %s: %v", bt.serviceUUID, err)
-	}
-	targetService := services[0]
-	log.Log.Infof("找到服务: %s", bt.serviceUUID)
-
-	// 发现读取特征并订阅通知
-	charReadUUID, err := bluetooth.ParseUUID(bt.charReadUUID)
-	if err != nil {
-		return fmt.Errorf("无效的读取特征UUID: %v", err)
+		return fmt.Errorf("发现服务失败或无服务: %v", err)
 	}
 
-	readChars, err := targetService.DiscoverCharacteristics([]bluetooth.UUID{charReadUUID})
-	if err != nil || len(readChars) == 0 {
-		return fmt.Errorf("未找到读取特征 %s: %v", bt.charReadUUID, err)
-	}
-	bt.readChar = &readChars[0]
+	var targetService *bluetooth.DeviceService
+	cleanServiceUUID := strings.ToLower(strings.TrimSpace(bt.serviceUUID))
 
-	// 订阅通知
+	// 遍历寻找匹配目标服务的 UUID
+	for i, svc := range services {
+		svcUUIDStr := strings.ToLower(svc.UUID().String())
+		log.Log.Debugf("发现蓝牙服务: %s", svcUUIDStr)
+		if strings.Contains(svcUUIDStr, cleanServiceUUID) {
+			targetService = &services[i]
+			break
+		}
+	}
+
+	// 若未精准匹配，优先选择首个非标准 SIG 基础服务（跳过 1800, 1801）
+	if targetService == nil {
+		for i, svc := range services {
+			svcUUIDStr := strings.ToLower(svc.UUID().String())
+			if !strings.HasPrefix(svcUUIDStr, "00001800") && !strings.HasPrefix(svcUUIDStr, "00001801") {
+				targetService = &services[i]
+				log.Log.Warnf("未找到精确匹配服务 %s，降级选用候选服务: %s", bt.serviceUUID, svcUUIDStr)
+				break
+			}
+		}
+	}
+
+	if targetService == nil {
+		targetService = &services[0]
+	}
+	log.Log.Infof("选定蓝牙服务: %s", targetService.UUID().String())
+
+	// 2. 发现服务中的所有特征
+	chars, err := targetService.DiscoverCharacteristics(nil)
+	if err != nil || len(chars) == 0 {
+		return fmt.Errorf("未在服务中找到任何特征: %v", err)
+	}
+
+	cleanReadUUID := strings.ToLower(strings.TrimSpace(bt.charReadUUID))
+	cleanWriteUUID := strings.ToLower(strings.TrimSpace(bt.charWriteUUID))
+
+	for i, ch := range chars {
+		chUUIDStr := strings.ToLower(ch.UUID().String())
+		log.Log.Debugf("发现特征: %s", chUUIDStr)
+
+		if strings.Contains(chUUIDStr, cleanReadUUID) && bt.readChar == nil {
+			bt.readChar = &chars[i]
+		}
+		if strings.Contains(chUUIDStr, cleanWriteUUID) && bt.writeChar == nil {
+			bt.writeChar = &chars[i]
+		}
+	}
+
+	// 降级兜底：若未精确匹配到读写特征，智能指派
+	if bt.readChar == nil && len(chars) > 0 {
+		bt.readChar = &chars[len(chars)-1]
+		log.Log.Warnf("未找到读特征 %s，降级选用: %s", bt.charReadUUID, bt.readChar.UUID().String())
+	}
+	if bt.writeChar == nil && len(chars) > 0 {
+		bt.writeChar = &chars[0]
+		log.Log.Warnf("未找到写特征 %s，降级选用: %s", bt.charWriteUUID, bt.writeChar.UUID().String())
+	}
+
+	if bt.readChar == nil {
+		return fmt.Errorf("未能配置蓝牙读取特征")
+	}
+
+	// 3. 订阅通知
 	bt.wg.Add(1)
 	go func() {
 		defer bt.wg.Done()
@@ -579,26 +671,14 @@ func (bt *TBluetooth) setupDevice(device bluetooth.Device) error {
 			}
 		})
 		if err != nil {
-			log.Log.Errorf("订阅特征失败: %v", err)
+			log.Log.Errorf("订阅蓝牙通知特征失败: %v", err)
 		} else {
-			log.Log.Info("订阅成功，等待接收数据...")
+			log.Log.Info("蓝牙通知订阅成功，等待接收数据...")
 		}
 	}()
 
-	// 发现写入特征
-	charWriteUUID, err := bluetooth.ParseUUID(bt.charWriteUUID)
-	if err != nil {
-		return fmt.Errorf("无效的写入特征UUID: %v", err)
-	}
-
-	writeChars, err := targetService.DiscoverCharacteristics([]bluetooth.UUID{charWriteUUID})
-	if err != nil || len(writeChars) == 0 {
-		return fmt.Errorf("未找到写入特征 %s: %v", bt.charWriteUUID, err)
-	}
-	bt.writeChar = &writeChars[0]
-
 	bt.isAlive.Store(true)
-	log.Log.Info("蓝牙连接成功")
+	log.Log.Info("蓝牙连接与特征订阅全部成功")
 
 	// 启动读写协程
 	go bt.read()
@@ -668,7 +748,6 @@ func (bt *TBluetooth) scanDevicesWithAdapter(adapter *bluetooth.Adapter, timeout
 		return nil, fmt.Errorf("扫描失败: %v", err)
 	}
 
-	log.Log.Infof("扫描完成，发现 %d 个设备", len(results))
 	return results, nil
 }
 

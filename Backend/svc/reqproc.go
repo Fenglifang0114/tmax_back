@@ -738,8 +738,23 @@ func procGetUiConf(scale *Scale, req SRequest) (*ScaleRespMsg, error) {
 	modeInt, _ := strconv.Atoi(req.ReqData)
 	modeUint := uint(modeInt)
 	// TODO:需要连上之后加sn  ScaleSn
-	config, _ := mSrvMgr.modeSetting.GetModeSetting(modeUint)
-	configStr, _ := json.MarshalToString(config[0])
+	config, err := mSrvMgr.modeSetting.GetModeSetting(modeUint)
+	var conf ModeSetting
+	if err == nil && len(config) > 0 {
+		conf = config[0]
+	} else {
+		conf = ModeSetting{
+			ScaleMode:     modeUint,
+			DateFormat:    "0",
+			DateSeparator: "-",
+			StableTime:    "1",
+			ZeroRange:     "1",
+			RecMode:       "0",
+			SaveMode:      "0",
+			WgtMode:       0,
+		}
+	}
+	configStr, _ := json.MarshalToString(conf)
 	respMsg := &ScaleRespMsg{MsgType: m.GET_UI_CONF_RESP, MsgBody: configStr, ScaleId: scale.Id}
 	return respMsg, nil
 }
